@@ -36,7 +36,7 @@ def _slurm_queued_or_running_jobs():
     try:
         out = subprocess.check_output("squeue --noheader -o %j", shell=True,
                                       stderr=subprocess.PIPE)
-        out = out.split("\n")[:-1]
+        out = out.splitlines()[:-1]
         return out
     except subprocess.CalledProcessError:
         # squeue is not available
