@@ -12,7 +12,7 @@ install:
   - "sudo apt-get install slurm-llnl"
   - "sudo /usr/sbin/create-munge-key"
   - "sudo service munge start"
-  - "sudo python scripts/configure_slurm.py"
+  - "sudo python continuous_integration/configure_slurm.py"
 
 # command to run tests
 script: make
