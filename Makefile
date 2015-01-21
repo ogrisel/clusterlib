@@ -1,6 +1,7 @@
 # Author: Arnaud Joly
 
 all: clean inplace test
+	srun -N1 /bin/hostname
 
 clean:
 	python setup.py clean
