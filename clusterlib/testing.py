@@ -7,7 +7,6 @@ Note: this module has a dependency on the nose package.
 #
 # License: BSD 3 clause
 import shutil
-import weakref
 import warnings
 from tempfile import mkdtemp
 
@@ -28,21 +27,17 @@ class TemporaryDirectory(object):
     Upon exiting the context, the directory and everything contained
     in it are removed.
 
-    Note: this class backported from the Python 3.4 stdlib for backward
-    compat with Python 2.
+    Note: this class backported and adapted from the Python 3.4 stdlib for
+    backward compat of the tests with Python 2.
 
     """
 
     # Handle mkdtemp raising an exception
     name = None
-    _finalizer = None
     _closed = False
 
     def __init__(self, suffix="", prefix="tmp", dir=None):
         self.name = mkdtemp(suffix, prefix, dir)
-        self._finalizer = weakref.finalize(
-            self, self._cleanup, self.name,
-            warn_message="Implicitly cleaning up {!r}".format(self))
 
     @classmethod
     def _cleanup(cls, name, warn_message=None):
@@ -60,8 +55,6 @@ class TemporaryDirectory(object):
         self.cleanup()
 
     def cleanup(self):
-        if self._finalizer is not None:
-            self._finalizer.detach()
         if self.name is not None and not self._closed:
             shutil.rmtree(self.name)
             self._closed = True

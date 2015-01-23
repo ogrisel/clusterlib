@@ -25,4 +25,4 @@ def test_executor_map():
         cluster_folder = os.path.join(test_folder, 'clusterlib')
         with ClusterExecutor(folder=cluster_folder) as e:
             results = e.map(_increment, range(10))
-            assert_equal(results, range(1, 11))
+            assert_equal(list(results), list(range(1, 11)))
