@@ -5,6 +5,9 @@ See:
 https://docs.python.org/3/library/concurrent.futures.html
 
 """
+# Authors: Olivier Grisel
+#
+# License: BSD 3 clause
 import os
 import os.path as op
 import time
@@ -282,7 +285,7 @@ def execute_job(job_folder):
     try:
         func = _load(op.join(job_folder, 'callable.pkl'))
         args, kwargs = _load(op.join(job_folder, 'input.pkl'),
-                                   mmap_mode='r')
+                             mmap_mode='r')
         results = func(*args, **kwargs)
         _dump(results, op.join(job_folder, 'output.pkl'))
     except InterruptedError:
