@@ -14,22 +14,12 @@ import time
 import sys
 import logging
 import socket
-try:
-    import cPickle as pickle  # Python 2 compat
-except ImportError:
-    import pickle
+import joblib
 
 from clusterlib.scheduler import submit
 
 logger = logging.getLogger('clusterlib')
 
-try:
-    # Try to use joblib for efficient pickling of numpy arrays with
-    # support for memory mapping
-    import joblib
-except ImportError:
-    logger.info("joblib is not available: falling back to default pickling")
-    joblib = None
 
 CANCELLED = 'cancelled'
 RUNNING = 'running'
@@ -69,19 +59,11 @@ def safe_makedirs(folder):
 
 
 def _dump(obj, filename):
-    if joblib is not None:
-        joblib.dump(obj, filename)
-    else:
-        with open(filename, 'wb') as f:
-            pickle.dump(obj, f)
+    joblib.dump(obj, filename)
 
 
 def _load(filename, mmap_mode=None):
-    if joblib is not None:
-        return joblib.load(filename, mmap_mode=mmap_mode)
-    else:
-        with open(filename, 'rb') as f:
-            return pickle.load(f)
+    return joblib.load(filename, mmap_mode=mmap_mode)
 
 
 class ClusterExecutor(object):

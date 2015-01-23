@@ -10,7 +10,7 @@
 set -xe # Exit on first error
 
 # Install dependency for full test
-pip install coverage coveralls
+pip install coverage coveralls joblib
 pip install sphinx_bootstrap_theme
 
 
