@@ -161,7 +161,8 @@ class ClusterExecutor(object):
             raise RuntimeError('Command "%s" returned code %s'
                                % (submit_cmd, code))
 
-    def map(self, fn, *iterables, timeout=None):
+    def map(self, fn, *iterables, **kwargs):
+        timeout = kwargs.get('timeout')  # Python 2 compat
         if timeout is not None:
             end_time = timeout + time.time()
 
