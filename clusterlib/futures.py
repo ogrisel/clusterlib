@@ -11,11 +11,22 @@ import time
 import sys
 import logging
 import socket
+try:
+    import cPickle as pickle  # Python 2 compat
+except ImportError:
+    import pickle
 
-import joblib
 from clusterlib.scheduler import submit
 
 logger = logging.getLogger('clusterlib')
+
+try:
+    # Try to use joblib for efficient pickling of numpy arrays with
+    # support for memory mapping
+    import joblib
+except ImportError:
+    logger.info("joblib is not available: falling back to default pickling")
+    joblib = None
 
 CANCELLED = 'cancelled'
 RUNNING = 'running'
@@ -54,6 +65,22 @@ def safe_makedirs(folder):
         # else: folder already exists: ignore
 
 
+def _dump(obj, filename):
+    if joblib is not None:
+        joblib.dump(obj, filename)
+    else:
+        with open(filename, 'wb') as f:
+            pickle.dump(obj, f)
+
+
+def _load(filename, mmap_mode=None):
+    if joblib is not None:
+        return joblib.load(filename, mmap_mode=mmap_mode)
+    else:
+        with open(filename, 'rb') as f:
+            return pickle.load(f)
+
+
 class ClusterExecutor(object):
 
     def __init__(self, folder='clusterlib', backend='auto', min_memory=4000,
@@ -76,7 +103,7 @@ class ClusterExecutor(object):
             # completed successfully: collect the output and return directly.
             logger.debug('Reloading existing job output: %s', output_filename)
             try:
-                result = joblib.load(output_filename)
+                result = _load(output_filename)
                 return ClusterFuture(job_name, self, fn, args, kwargs,
                                      status=FINISHED, result=result)
             except EOFError:
@@ -91,7 +118,7 @@ class ClusterExecutor(object):
             logger.debug('Reloading existing job exception: %s',
                          exception_filename)
             try:
-                exception = joblib.load(exception_filename)
+                exception = _load(exception_filename)
                 return ClusterFuture(job_name, self, fn, args, kwargs,
                                      status=FINISHED, exception=exception)
             except EOFError:
@@ -112,8 +139,8 @@ class ClusterExecutor(object):
             return finished_future
 
         # Dump the input
-        joblib.dump(fn, op.join(job_folder, 'callable.pkl'))
-        joblib.dump((args, kwargs), op.join(job_folder, 'input.pkl'))
+        _dump(fn, op.join(job_folder, 'callable.pkl'))
+        _dump((args, kwargs), op.join(job_folder, 'input.pkl'))
 
         cancelled_filename = op.join(job_folder, 'cancelled')
         if op.exists(cancelled_filename):
@@ -252,11 +279,11 @@ class ClusterFuture(object):
 def execute_job(job_folder):
     """Function to be executed by the worker node"""
     try:
-        func = joblib.load(op.join(job_folder, 'callable.pkl'))
-        args, kwargs = joblib.load(op.join(job_folder, 'input.pkl'),
+        func = _load(op.join(job_folder, 'callable.pkl'))
+        args, kwargs = _load(op.join(job_folder, 'input.pkl'),
                                    mmap_mode='r')
         results = func(*args, **kwargs)
-        joblib.dump(results, op.join(job_folder, 'output.pkl'))
+        _dump(results, op.join(job_folder, 'output.pkl'))
     except InterruptedError:
         logger.debug("Job in %s was interrupted by host", job_folder)
         with open(op.join(job_folder, 'cancelled'), 'wb') as f:
@@ -264,7 +291,7 @@ def execute_job(job_folder):
             f.write(socket.gethostname())
     except Exception as e:
         logger.debug("Job in %s raised %s", job_folder)
-        joblib.dump(e, op.join(job_folder, 'exception.pkl'))
+        _dump(e, op.join(job_folder, 'exception.pkl'))
 
 
 if __name__ == '__main__':
