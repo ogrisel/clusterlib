@@ -342,6 +342,8 @@ class ClusterFuture(object):
 
 def execute_job(job_folder):
     """Function to be executed by the worker node"""
+    # TODO: register a signal handler to handle manual qdel events and kill
+    # as cancellations
     running_marker = AtomicMarker(job_folder, 'running')
     if running_marker.isset():
         # A concurrent worker is already running the same task: do not
@@ -358,10 +360,6 @@ def execute_job(job_folder):
                              mmap_mode='r')
         results = func(*args, **kwargs)
         _dump(results, op.join(job_folder, 'output.pkl'))
-    except InterruptedError:
-        # Consider interruption by signaling as a manual way to cancel a job
-        logger.debug("Job in %s was interrupted by host", job_folder)
-        AtomicMarker(job_folder, 'cancelled').set()
     except Exception as e:
         logger.debug("Job in %s raised %s", job_folder)
         _dump(e, op.join(job_folder, 'exception.pkl'))
