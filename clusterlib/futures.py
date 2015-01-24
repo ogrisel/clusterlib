@@ -174,14 +174,6 @@ class ClusterExecutor(object):
             future._status = CANCELLED
             return
 
-        f = self._get_finished_future(
-            job_folder, future.job_name, future._callable, future._input_args,
-            future._input_kwargs)
-        if f is not None:
-            future._status = f._status
-            future._result = f._result
-            future._exception = f._exception
-
         running_marker = op.join(job_folder, 'running')
         if op.islink(running_marker) or op.exists(running_marker):
             # TODO: it might be good to check with the queue system
@@ -191,7 +183,18 @@ class ClusterExecutor(object):
             future._status = RUNNING
             return
 
-        # Otherwise the futures is pro
+        f = self._get_finished_future(
+            job_folder, future.job_name, future._callable, future._input_args,
+            future._input_kwargs)
+        if f is not None:
+            future._status = f._status
+            future._result = f._result
+            future._exception = f._exception
+            return
+
+        # TODO: otherwise the job is probably queued. This should be checked.
+        # if this is not the case we should put a RuntimeError instance
+        # as the exception and mark the f._status as FINISHED
 
 
 class ClusterFuture(object):
@@ -324,7 +327,7 @@ def execute_job(job_folder):
 
     # Release the execution lock
     if op.islink(running_link) and op.exists(running_link):
-        os.symlink(running_link, running_link)
+        os.unlink(running_link, running_link)
 
 
 if __name__ == '__main__':
