@@ -13,7 +13,6 @@ import os.path as op
 import time
 import sys
 import logging
-import socket
 import joblib
 
 from clusterlib.scheduler import submit
@@ -127,11 +126,11 @@ class ClusterExecutor(object):
         _dump(fn, op.join(job_folder, 'callable.pkl'))
         _dump((args, kwargs), op.join(job_folder, 'input.pkl'))
 
-        cancelled_filename = op.join(job_folder, 'cancelled')
-        if op.exists(cancelled_filename):
+        cancelled_marker = op.join(job_folder, 'cancelled')
+        if op.exists(cancelled_marker):
             # If job was cancelled in the past, un-cancel it before
             # resubmitting it
-            os.unlink(cancelled_filename)
+            os.unlink(cancelled_marker)
         self._dispatch_job(job_name, job_folder)
         return ClusterFuture(job_name, self, fn, args, kwargs, status=PENDING)
 
@@ -157,7 +156,7 @@ class ClusterExecutor(object):
                 if timeout is None:
                     yield future.result()
                 else:
-                    yield future.result(end_time - time.time())
+                    yield future.result(timeout=end_time - time.time())
         finally:
             for future in futures:
                 future.cancel()
@@ -168,25 +167,37 @@ class ClusterExecutor(object):
 
     def _update_job_status(self, future):
         job_folder = op.join(self.folder, future.job_name)
+        cancel_marker = op.join(job_folder, 'cancelled')
+        if op.islink(cancel_marker) or op.exists(cancel_marker):
+            future._status = CANCELLED
+            return
+
         f = self._get_finished_future(
             job_folder, future.job_name, future._callable, future._input_args,
             future._input_kwargs)
         if f is not None:
-            # TODO: there must be a better way to do it
             future._status = f._status
             future._result = f._result
             future._exception = f._exception
-        # TODO: detect cancelled jobs
 
-    def _cancel_job(self, future):
-        pass
+        running_marker = op.join(job_folder, 'running')
+        if op.islink(running_marker) or op.exists(running_marker):
+            # TODO: it might be good to check with the queue system
+            # that there is actually a worker executing this task and
+            # that is has not crashed without removing the running marker
+            # for instance by with a segfault
+            future._status = RUNNING
+            return
+
+        # Otherwise the futures is pro
 
 
 class ClusterFuture(object):
 
-    def __init__(self, job_name, executor, fn, args, kwargs, status=PENDING,
-                 result=None, exception=None):
+    def __init__(self, job_name, job_folder, executor, fn, args, kwargs,
+                 status=PENDING, result=None, exception=None):
         self.job_name = job_name
+        self._job_folder = job_folder
         self._callable = fn
         self._input_args = args
         self._input_kwargs = kwargs
@@ -205,7 +216,26 @@ class ClusterFuture(object):
         signal will be sent to the running process by the cluster scheduler.
 
         """
-        return self._executor._cancel_job(self)
+        self._executor._update_job_status(self)
+        if self._status == FINISHED:
+            return False
+
+        if self._status == RUNNING and not interrupt_running:
+            return False
+
+        if self._status == CANCELLED:
+            return True
+
+        # We use a symlink as job cancelation marker as creating and deleting
+        # a symlink is a cheap and atomic operations under Unix / NFS
+        cancel_link = op.join(self._job_folder, 'cancelled')
+        if not op.islink(cancel_link) and not op.exists(cancel_link):
+            os.symlink(cancel_link, cancel_link)
+        self._status = CANCELLED
+
+        # TODO: actually call qdel to cleanup free the cluster resources
+        # and avoid or interrupt the execution of cancelled jobs
+        return True
 
     def cancelled(self):
         """Return True if the call was successfully cancelled."""
@@ -264,6 +294,16 @@ class ClusterFuture(object):
 
 def execute_job(job_folder):
     """Function to be executed by the worker node"""
+    running_link = op.join(job_folder, 'running')
+    if op.islink(running_link) and op.exists(running_link):
+        # A concurrent worker is already running the same task: do not
+        # duplicate work to avoid corrupting the output
+        return
+    else:
+        # Put the running marker into this job folder. Creating a symlink
+        # is an atomic operation. This marker therefore also serves as
+        # protection against concurrent execution of the same job twice.
+        os.symlink(running_link, running_link)
     try:
         func = _load(op.join(job_folder, 'callable.pkl'))
         args, kwargs = _load(op.join(job_folder, 'input.pkl'),
@@ -271,13 +311,18 @@ def execute_job(job_folder):
         results = func(*args, **kwargs)
         _dump(results, op.join(job_folder, 'output.pkl'))
     except InterruptedError:
+        # Consider interruption by signaling as a manual way to cancel a job
         logger.debug("Job in %s was interrupted by host", job_folder)
-        with open(op.join(job_folder, 'cancelled'), 'wb') as f:
-            # TODO: log more info in a json formatted file instead?
-            f.write(socket.gethostname())
+        cancel_link = op.join(job_folder, 'cancelled')
+        if not op.islink(cancel_link) and not op.exists(cancel_link):
+            os.symlink(cancel_link, cancel_link)
     except Exception as e:
         logger.debug("Job in %s raised %s", job_folder)
         _dump(e, op.join(job_folder, 'exception.pkl'))
+
+    # Release the execution lock
+    if op.islink(running_link) and op.exists(running_link):
+        os.symlink(running_link, running_link)
 
 
 if __name__ == '__main__':
