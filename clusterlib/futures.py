@@ -88,8 +88,8 @@ class ClusterExecutor(object):
             logger.debug('Reloading existing job output: %s', output_filename)
             try:
                 result = _load(output_filename)
-                return ClusterFuture(job_name, self, fn, args, kwargs,
-                                     status=FINISHED, result=result)
+                return ClusterFuture(job_name, job_folder, self, fn, args,
+                                     kwargs, status=FINISHED, result=result)
             except EOFError:
                 logger.debug('Invalid output file: %s, resubmitting',
                              output_filename)
@@ -103,8 +103,9 @@ class ClusterExecutor(object):
                          exception_filename)
             try:
                 exception = _load(exception_filename)
-                return ClusterFuture(job_name, self, fn, args, kwargs,
-                                     status=FINISHED, exception=exception)
+                return ClusterFuture(job_name, job_folder, self, fn, args,
+                                     kwargs, status=FINISHED,
+                                     exception=exception)
             except EOFError:
                 logger.debug('Invalid exception file: %s, resubmitting',
                              exception_filename)
@@ -132,7 +133,8 @@ class ClusterExecutor(object):
             # resubmitting it
             os.unlink(cancelled_marker)
         self._dispatch_job(job_name, job_folder)
-        return ClusterFuture(job_name, self, fn, args, kwargs, status=PENDING)
+        return ClusterFuture(job_name, job_folder, self, fn, args, kwargs,
+                             status=PENDING)
 
     def _dispatch_job(self, job_name, job_folder):
         cmd = "%s -m clusterlib.futures %s" % (sys.executable, job_folder)
