@@ -65,7 +65,52 @@ def _load(filename, mmap_mode=None):
     return joblib.load(filename, mmap_mode=mmap_mode)
 
 
+class AtomicMarker(object):
+    """Named marker for coordination between concurrent processes
+
+    clusterlib leverages a shared filesystem to exchange data between
+    the main coordination script and worker processes.
+
+    Such filesystem have typically very few atomic operations. This
+    implementation leverages the atomic nature of symbolic links many
+    UNIX filesystems (NFS included) to implement coordination marker between
+    concurrent processes.
+
+    """
+
+    def __init__(self, job_folder, marker_id):
+        self.marker_path = op.join(job_folder, marker_id)
+
+    def isset(self):
+        """Check the presence of the marker"""
+        return op.islink(self.marker_path)
+
+    def set(self, raise_if_exists=False):
+        try:
+            os.symlink(self.marker_path, self.marker_path)
+            return True
+        except OSError as e:
+            if e.errno == 17 and not raise_if_exists:
+                # marker has already been set, ignoring
+                return False
+            else:
+                raise  # this is not expected
+
+    def unset(self):
+        """Ensure that the marker has been removed"""
+        try:
+            os.unlink(self.marker_path)
+            return True
+        except OSError as e:
+            if e.errno == 2:
+                # marker has already been unset: ignore
+                return False
+            else:
+                raise  # this is not expected
+
+
 class ClusterExecutor(object):
+    """Context manager to schedule Python jobs on a cluster"""
 
     def __init__(self, folder='clusterlib', backend='auto', min_memory=4000,
                  job_max_time='24:00:00',
@@ -127,11 +172,11 @@ class ClusterExecutor(object):
         _dump(fn, op.join(job_folder, 'callable.pkl'))
         _dump((args, kwargs), op.join(job_folder, 'input.pkl'))
 
-        cancelled_marker = op.join(job_folder, 'cancelled')
-        if op.exists(cancelled_marker):
-            # If job was cancelled in the past, un-cancel it before
-            # resubmitting it
-            os.unlink(cancelled_marker)
+        # If job was cancelled in the past, remove the cancellation marker
+        # before resubmiting it
+        AtomicMarker(job_folder, 'cancelled').unset()
+
+        # Perform the actual dispath
         self._dispatch_job(job_name, job_folder)
         return ClusterFuture(job_name, job_folder, self, fn, args, kwargs,
                              status=PENDING)
@@ -233,9 +278,7 @@ class ClusterFuture(object):
 
         # We use a symlink as job cancelation marker as creating and deleting
         # a symlink is a cheap and atomic operations under Unix / NFS
-        cancel_link = op.join(self._job_folder, 'cancelled')
-        if not op.islink(cancel_link) and not op.exists(cancel_link):
-            os.symlink(cancel_link, cancel_link)
+        AtomicMarker(self._job_folder, 'cancelled').set()
         self._status = CANCELLED
 
         # TODO: actually call qdel to cleanup free the cluster resources
@@ -299,16 +342,16 @@ class ClusterFuture(object):
 
 def execute_job(job_folder):
     """Function to be executed by the worker node"""
-    running_link = op.join(job_folder, 'running')
-    if op.islink(running_link) and op.exists(running_link):
+    running_marker = AtomicMarker(job_folder, 'running')
+    if running_marker.isset():
         # A concurrent worker is already running the same task: do not
-        # duplicate work to avoid corrupting the output
+        # duplicate work to avoid corrupting the output.
         return
     else:
         # Put the running marker into this job folder. Creating a symlink
         # is an atomic operation. This marker therefore also serves as
         # protection against concurrent execution of the same job twice.
-        os.symlink(running_link, running_link)
+        running_marker.set()
     try:
         func = _load(op.join(job_folder, 'callable.pkl'))
         args, kwargs = _load(op.join(job_folder, 'input.pkl'),
@@ -318,16 +361,13 @@ def execute_job(job_folder):
     except InterruptedError:
         # Consider interruption by signaling as a manual way to cancel a job
         logger.debug("Job in %s was interrupted by host", job_folder)
-        cancel_link = op.join(job_folder, 'cancelled')
-        if not op.islink(cancel_link) and not op.exists(cancel_link):
-            os.symlink(cancel_link, cancel_link)
+        AtomicMarker(job_folder, 'cancelled').set()
     except Exception as e:
         logger.debug("Job in %s raised %s", job_folder)
         _dump(e, op.join(job_folder, 'exception.pkl'))
-
-    # Release the execution lock
-    if op.islink(running_link) and op.exists(running_link):
-        os.unlink(running_link, running_link)
+    finally:
+        # Release the execution marker
+        running_marker.unset()
 
 
 if __name__ == '__main__':
