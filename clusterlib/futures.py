@@ -379,7 +379,18 @@ def _make_cancellation_handler(job_folder, running_marker):
 
 
 def execute_job(job_folder):
-    """Function to be executed by the worker node"""
+    """Function to be executed by the worker node
+
+    The main purpose of this wrapper is to:
+      - load the callable and its input arguments pickled in the job folder
+      - actually call the callable with those arguments
+      - collect the result(s) of the call and pickle them in the job folder
+      - collect any raised exception and pickle it in the job folder
+
+    This wrapper also takes care of updaing the 'running' and 'cancelled'
+    state markers via symbolic links also stored in the job folder.
+
+    """
     running_marker = AtomicMarker(job_folder, 'running')
     if running_marker.isset():
         # A concurrent worker is already running the same task: do not
@@ -396,6 +407,10 @@ def execute_job(job_folder):
     # is an atomic operation. This marker therefore also serves as
     # protection against concurrent execution of the same job twice.
     with running_marker:
+        # Make it possible for the callable to introspect its clusterlib
+        # job_folder by passing it as an environment variable. This
+        # is mostly useful for testing and debuging
+        os.environ['CLUSTERLIB_JOB_FOLDER'] = job_folder
         try:
             func = _load(op.join(job_folder, 'callable.pkl'))
             args, kwargs = _load(op.join(job_folder, 'input.pkl'),

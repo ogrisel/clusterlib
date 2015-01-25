@@ -10,6 +10,7 @@ from nose.tools import assert_false
 from clusterlib.futures import ClusterExecutor
 from clusterlib.futures import ClusterCancelledError
 from clusterlib.futures import AtomicMarker
+from clusterlib.futures import CANCELLATION_SIGNALS
 from clusterlib.testing import TemporaryDirectory, skip_if_no_backend
 
 
@@ -142,6 +143,59 @@ def test_executor_submit():
                 assert_true(f.done())
                 assert_false(f.cancel())
                 assert_false(f.cancelled())
+
+
+def _check_self_is_running():
+    job_folder = os.environ['CLUSTERLIB_JOB_FOLDER']
+    return AtomicMarker(job_folder, 'running').isset()
+
+
+def test_running_marker_from_job():
+    with TemporaryDirectory(dir=BASES_SHARED_FOLDER) as test_folder:
+        cluster_folder = os.path.join(test_folder, 'clusterlib')
+        with ClusterExecutor(folder=cluster_folder, poll_interval=1) as e:
+            f = e.submit(_check_self_is_running)
+            assert_true(f.result())
+
+            # Once the job has completed, the running marker is no longer set
+            assert_false(AtomicMarker(f._job_folder, 'running').isset())
+
+
+def _send_signal_to_self(signum):
+    os.kill(os.getpid(), signum)
+
+
+@skip_if_no_backend
+def test_executor_cancel_by_signal():
+    with TemporaryDirectory(dir=BASES_SHARED_FOLDER) as test_folder:
+        cluster_folder = os.path.join(test_folder, 'clusterlib')
+        with ClusterExecutor(folder=cluster_folder, poll_interval=1) as e:
+            futures = [e.submit(_send_signal_to_self, s)
+                       for s in CANCELLATION_SIGNALS]
+            for f in futures:
+                # Those jobs can never complete: they will automatically
+                # cancel them selves before being able
+                assert_false(f.done())
+
+                # The jobs have only a very short window to be running
+                assert_in(f.running(), [True, False])
+
+                # Some of them might already be cancelled at this point
+                assert_in(f.cancelled(), [True, False])
+
+            # Block to the results, instead this should raise a cancellation
+            # error
+            for f in futures:
+                assert_raises(ClusterCancelledError, f.result)
+                assert_raises(ClusterCancelledError, f.exception)
+
+            for f in futures:
+                # All jobs should be in state 'cancelled' at this point
+                assert_true(f.cancelled())
+
+                # Cancelled jobs are not done nor running
+                assert_false(f.done())
+                assert_false(f.running())
 
 
 @skip_if_no_backend
