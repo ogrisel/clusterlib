@@ -150,6 +150,7 @@ def _check_self_is_running():
     return AtomicMarker(job_folder, 'running').isset()
 
 
+@skip_if_no_backend
 def test_running_marker_from_job():
     with TemporaryDirectory(dir=BASES_SHARED_FOLDER) as test_folder:
         cluster_folder = os.path.join(test_folder, 'clusterlib')
