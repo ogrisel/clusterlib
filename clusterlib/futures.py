@@ -145,36 +145,38 @@ class ClusterExecutor(object):
         # TODO: put any cleanup logic necessary here
         pass
 
-    def _get_finished_future(self, job_folder, job_name, fn, args, kwargs):
+    def _get_finished_future(self, job_folder, job_name, fn, args, kwargs,
+                             raise_on_invalid=True):
         output_filename = op.join(job_folder, 'output.pkl')
         if op.exists(output_filename):
             # The same job has already been submitted in the past and
             # completed successfully: collect the output and return directly.
-            logger.debug('Reloading existing job output: %s', output_filename)
+            logger.debug('Loading job output: %s', output_filename)
             try:
                 result = _load(output_filename)
                 return ClusterFuture(job_name, job_folder, self, fn, args,
                                      kwargs, status=FINISHED, result=result)
             except EOFError:
-                logger.warn('Invalid output file: %s, resubmitting',
-                            output_filename)
-                pass
+                if raise_on_invalid:
+                    raise
+                logger.warn('Invalid output file: %s', output_filename)
+                return None
 
         exception_filename = op.join(job_folder, 'exception.pkl')
         if op.exists(exception_filename):
             # The same job has already been submitted in the past and
             # failed: collect the exception and return directly.
-            logger.debug('Reloading existing job exception: %s',
-                         exception_filename)
+            logger.debug('Loading job exception: %s', exception_filename)
             try:
                 exception = _load(exception_filename)
                 return ClusterFuture(job_name, job_folder, self, fn, args,
                                      kwargs, status=FINISHED,
                                      exception=exception)
             except EOFError:
-                logger.warn('Invalid exception file: %s, resubmitting',
-                            exception_filename)
-                pass
+                if raise_on_invalid:
+                    raise
+                logger.warn('Invalid exception file: %s', exception_filename)
+                return None
 
     def submit(self, fn, *args, **kwargs):
         job_hash = joblib.hash((fn, args, kwargs))
@@ -184,8 +186,10 @@ class ClusterExecutor(object):
 
         # TODO: find a better API for _get_finished_future
         finished_future = self._get_finished_future(job_folder, job_name,
-                                                    fn, args, kwargs)
+                                                    fn, args, kwargs,
+                                                    raise_on_invalid=False)
         if finished_future is not None:
+            # The same job has already completed in the past, let's reuse it.
             return finished_future
 
         # Dump the input

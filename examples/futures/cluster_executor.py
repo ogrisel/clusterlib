@@ -4,7 +4,7 @@ import logging
 
 # Change the logging level to DEBUG to introspect what's happening under the
 # hood
-logging.basicConfig(format='%(levelname)s: %(message)s', level=logging.DEBUG)
+logging.basicConfig(format='%(levelname)s: %(message)s', level=logging.INFO)
 
 
 with ClusterExecutor(poll_interval=10) as e:
