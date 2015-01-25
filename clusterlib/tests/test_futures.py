@@ -9,6 +9,7 @@ from nose.tools import assert_false
 
 from clusterlib.futures import ClusterExecutor
 from clusterlib.futures import ClusterCancelledError
+from clusterlib.futures import AtomicMarker
 from clusterlib.testing import TemporaryDirectory, skip_if_no_backend
 
 
@@ -26,6 +27,45 @@ class CustomException(Exception):
 def _raise_exc(exc):
     """Dummy function to """
     raise exc
+
+
+def test_atomic_markers():
+    with TemporaryDirectory() as test_folder:
+        with AtomicMarker(test_folder, 'marker') as marker:
+            assert_true(marker.isset())
+
+            # Trying to set the original marker twice ignores
+            # the request
+            assert_false(marker.set())
+
+            # Create a different marker in the same folder but with a
+            # different identifier
+            marker2 = AtomicMarker(test_folder, 'other_marker',
+                                   raise_if_exists=True)
+            assert_false(marker2.isset())
+            assert_true(marker2.set())
+            assert_true(marker2.unset())
+            assert_false(marker2.unset())
+
+            # Create a new marker with the original id, in the same folder
+            marker3 = AtomicMarker(test_folder, 'marker',
+                                   raise_if_exists=True)
+
+            assert_true(marker3.isset())
+            assert_raises(OSError, marker3.set)
+            assert_true(marker.isset())
+
+        # Outside the with block the marker is unset
+        assert_false(marker.isset())
+        assert_false(marker3.isset())
+
+        # It's now possible to set it with marker3
+        assert_true(marker3.set())
+        assert_true(marker.isset())
+        assert_true(marker3.isset())
+
+        # It's still not possible to set it twice
+        assert_raises(OSError, marker3.set)
 
 
 def test_executor_folder():

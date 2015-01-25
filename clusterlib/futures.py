@@ -14,6 +14,7 @@ import time
 import sys
 import logging
 import joblib
+import signal
 
 from clusterlib.scheduler import submit
 
@@ -25,6 +26,12 @@ RUNNING = 'running'
 FINISHED = 'finished'
 PENDING = 'pending'
 DEFAULT_POLL_INTERVAL = 10  # in seconds
+CANCELLATION_SIGNALS = [
+    signal.SIGTERM,
+    signal.SIGABRT,
+    signal.SIGQUIT,
+]
+
 
 try:
     from concurrent.futures import TimeoutError, CancelledError
@@ -78,19 +85,27 @@ class AtomicMarker(object):
 
     """
 
-    def __init__(self, job_folder, marker_id):
+    def __init__(self, job_folder, marker_id, raise_if_exists=False):
         self.marker_path = op.join(job_folder, marker_id)
+        self.raise_if_exists = raise_if_exists
+
+    def __enter__(self):
+        self.set()
+        return self
+
+    def __exit__(self, e_type, e_value, e_traceback):
+        self.unset()
 
     def isset(self):
         """Check the presence of the marker"""
         return op.islink(self.marker_path)
 
-    def set(self, raise_if_exists=False):
+    def set(self):
         try:
             os.symlink(self.marker_path, self.marker_path)
             return True
         except OSError as e:
-            if e.errno == 17 and not raise_if_exists:
+            if e.errno == 17 and not self.raise_if_exists:
                 # marker has already been set, ignoring
                 return False
             else:
@@ -124,6 +139,10 @@ class ClusterExecutor(object):
 
     def __enter__(self):
         return self
+
+    def __exit__(self, e_type, e_value, e_traceback):
+        # TODO: put any cleanup logic necessary here
+        pass
 
     def _get_finished_future(self, job_folder, job_name, fn, args, kwargs):
         output_filename = op.join(job_folder, 'output.pkl')
@@ -207,10 +226,6 @@ class ClusterExecutor(object):
         finally:
             for future in futures:
                 future.cancel()
-
-    def __exit__(self, e_type, e_value, e_traceback):
-        # TODO: put any cleanup logic necessary here
-        pass
 
     def _update_job_status(self, future):
         job_folder = op.join(self.folder, future.job_name)
@@ -340,32 +355,43 @@ class ClusterFuture(object):
             time.sleep(self._executor.poll_interval)
 
 
+def _make_cancellation_handler(job_folder, running_marker):
+    def handler(signum, frame):
+        logger.debug("job in %s interrupted by signal %d",
+                     job_folder, signum)
+        AtomicMarker(job_folder, 'cancelled').set()
+        running_marker.unset()
+        sys.exit(0)
+    return handler
+
+
 def execute_job(job_folder):
     """Function to be executed by the worker node"""
-    # TODO: register a signal handler to handle manual qdel events and kill
-    # as cancellations
     running_marker = AtomicMarker(job_folder, 'running')
     if running_marker.isset():
         # A concurrent worker is already running the same task: do not
         # duplicate work to avoid corrupting the output.
         return
-    else:
-        # Put the running marker into this job folder. Creating a symlink
-        # is an atomic operation. This marker therefore also serves as
-        # protection against concurrent execution of the same job twice.
-        running_marker.set()
-    try:
-        func = _load(op.join(job_folder, 'callable.pkl'))
-        args, kwargs = _load(op.join(job_folder, 'input.pkl'),
-                             mmap_mode='r')
-        results = func(*args, **kwargs)
-        _dump(results, op.join(job_folder, 'output.pkl'))
-    except Exception as e:
-        logger.debug("Job in %s raised %s", job_folder)
-        _dump(e, op.join(job_folder, 'exception.pkl'))
-    finally:
-        # Release the execution marker
-        running_marker.unset()
+
+    # Register a signal handler to capture job cancellation signals such
+    # as a triggered by a qdel event under SGE
+    handler = _make_cancellation_handler(job_folder, running_marker)
+    for s in CANCELLATION_SIGNALS:
+        signal.signal(s, handler)
+
+    # Put the running marker into this job folder. Creating a symlink
+    # is an atomic operation. This marker therefore also serves as
+    # protection against concurrent execution of the same job twice.
+    with running_marker:
+        try:
+            func = _load(op.join(job_folder, 'callable.pkl'))
+            args, kwargs = _load(op.join(job_folder, 'input.pkl'),
+                                 mmap_mode='r')
+            results = func(*args, **kwargs)
+            _dump(results, op.join(job_folder, 'output.pkl'))
+        except Exception as e:
+            logger.debug("Job in %s raised %s", job_folder)
+            _dump(e, op.join(job_folder, 'exception.pkl'))
 
 
 if __name__ == '__main__':
