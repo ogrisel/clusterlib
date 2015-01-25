@@ -153,6 +153,7 @@ def test_executor_cancel():
 
             for f in [f1, f2]:
                 assert_false(f.done())
+                assert_in(f.running(), [True, False])
                 assert_false(f.cancelled())
 
             # Cancel the second long running jobs
@@ -166,9 +167,10 @@ def test_executor_cancel():
             assert_raises(ClusterCancelledError, f2.result)
             assert_raises(ClusterCancelledError, f2.exception)
 
-            # The first job is still running
-            assert_false(f2.done())
-            assert_false(f2.cancelled())
+            # The first job is still running (or pending in the queue)
+            assert_false(f1.done())
+            assert_in(f.running(), [True, False])
+            assert_false(f1.cancelled())
 
             # Cancel it as well
             assert_true(f1.cancel(interrupt_running=True))
