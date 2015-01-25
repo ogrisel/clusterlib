@@ -145,6 +145,33 @@ def test_executor_submit():
                 assert_false(f.cancelled())
 
 
+@skip_if_no_backend
+def test_executor_job_duplication():
+    with TemporaryDirectory(dir=BASES_SHARED_FOLDER) as test_folder:
+        cluster_folder = os.path.join(test_folder, 'clusterlib')
+        with ClusterExecutor(folder=cluster_folder, poll_interval=1) as e:
+            f1 = e.submit(sleep, 100)
+            f2 = e.submit(sleep, 100)
+
+            # the 2 jobs are mapped to the same folder because they share the
+            # same arguments
+            assert_equal(f1.job_name, f2.job_name)
+            assert_false(f1.done())
+            assert_false(f2.done())
+            assert_false(f1.cancelled())
+            assert_false(f2.cancelled())
+            if f1.running():
+                assert_true(f2.running())
+            sleep(0.1)
+            if f2.running():
+                assert_true(f1.running())
+
+            # Cancelling one job will automatically cancel the other
+            assert_true(f2.cancel())
+            assert_true(f1.cancelled())
+            assert_true(f2.cancelled())
+
+
 def _check_self_is_running():
     job_folder = os.environ['CLUSTERLIB_JOB_FOLDER']
     return AtomicMarker(job_folder, 'running').isset()
