@@ -89,18 +89,16 @@ def test_executor_map():
 
             # When the callable raises an exception, only the first exception
             # is raised
-            assert_raises(ValueError,
-                          e.map, _raise_exc,
-                          [ValueError(), AttributeError()])
-            assert_raises(AttributeError,
-                          e.map, _raise_exc,
-                          [AttributeError(), ValueError()])
+            results = e.map(_raise_exc, [ValueError(), AttributeError()])
+            assert_raises(ValueError, list(results))
+
+            results = e.map(_raise_exc, [AttributeError(), ValueError()])
+            assert_raises(AttributeError, list(results))
 
             # When the callable raises an exception, only the first exception
             # is raised
-            assert_raises(CustomException,
-                          e.map, _raise_exc,
-                          [CustomException(), ValueError()])
+            results = e.map(_raise_exc, [CustomException(), ValueError()])
+            assert_raises(CustomException, list(results))
 
 
 @skip_if_no_backend
