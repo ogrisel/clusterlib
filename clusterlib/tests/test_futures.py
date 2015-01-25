@@ -88,17 +88,18 @@ def test_executor_map():
             assert_equal(list(results), list(range(1, 11)))
 
             # When the callable raises an exception, only the first exception
-            # is raised
+            # is raised upon consumption of the first item of the results
+            # generator
             results = e.map(_raise_exc, [ValueError(), AttributeError()])
-            assert_raises(ValueError, list(results))
+            assert_raises(ValueError, list, results)
 
             results = e.map(_raise_exc, [AttributeError(), ValueError()])
-            assert_raises(AttributeError, list(results))
+            assert_raises(AttributeError, list, results)
 
             # When the callable raises an exception, only the first exception
             # is raised
             results = e.map(_raise_exc, [CustomException(), ValueError()])
-            assert_raises(CustomException, list(results))
+            assert_raises(CustomException, list, results)
 
 
 @skip_if_no_backend
