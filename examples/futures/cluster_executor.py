@@ -4,10 +4,10 @@ import logging
 
 # Change the logging level to DEBUG to introspect what's happening under the
 # hood
-logging.basicConfig(format='%(levelname)s: %(message)s', level=logging.INFO)
+logging.basicConfig(format='%(levelname)s: %(message)s', level=logging.DEBUG)
 
 
-with ClusterExecutor(poll_interval=.1) as e:
+with ClusterExecutor(poll_interval=10) as e:
     # Parallel map
     values = list(range(1, 11))
     print("About to call 'log' on values %r in parallel:" % values)

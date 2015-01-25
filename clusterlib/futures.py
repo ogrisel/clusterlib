@@ -19,6 +19,7 @@ import signal
 from clusterlib.scheduler import submit
 
 logger = logging.getLogger('clusterlib')
+TRACE = logging.DEBUG - 5  # Even more verbose than DEBUG
 
 
 CANCELLED = 'cancelled'
@@ -155,8 +156,8 @@ class ClusterExecutor(object):
                 return ClusterFuture(job_name, job_folder, self, fn, args,
                                      kwargs, status=FINISHED, result=result)
             except EOFError:
-                logger.debug('Invalid output file: %s, resubmitting',
-                             output_filename)
+                logger.warn('Invalid output file: %s, resubmitting',
+                            output_filename)
                 pass
 
         exception_filename = op.join(job_folder, 'exception.pkl')
@@ -171,8 +172,8 @@ class ClusterExecutor(object):
                                      kwargs, status=FINISHED,
                                      exception=exception)
             except EOFError:
-                logger.debug('Invalid exception file: %s, resubmitting',
-                             exception_filename)
+                logger.warn('Invalid exception file: %s, resubmitting',
+                            exception_filename)
                 pass
 
     def submit(self, fn, *args, **kwargs):
@@ -205,7 +206,7 @@ class ClusterExecutor(object):
         # TODO: pass additional cluster options here
         submit_cmd = submit(cmd, job_name=job_name, time=self.job_max_time,
                             memory=self.min_memory, backend=self.backend)
-        logger.debug(submit_cmd)
+        logger.log(TRACE, submit_cmd)
         code = os.system(submit_cmd)
         if code != 0:
             raise RuntimeError('Command "%s" returned code %s'
