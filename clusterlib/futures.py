@@ -319,8 +319,8 @@ class ClusterFuture(object):
         while True:
             self._executor._update_job_status(self)
             if self._status == CANCELLED:
-                # TODO: add informative exception message
-                raise ClusterCancelledError()
+                raise ClusterCancelledError('Job %s was cancelled'
+                                            % self.job_name)
             if self._status == FINISHED:
                 if self._exception is not None:
                     # TODO: check that this is the behavior as for other
@@ -328,31 +328,39 @@ class ClusterFuture(object):
                     raise self._exception
                 return self._result
 
-            next_tic = time.time() + self._executor.poll_interval
-            if (timeout is not None and (next_tic - start_tic) > timeout):
-                # TODO: add informative exception message
-                raise ClusterTimeoutError()
+            if (timeout is not None and (time.time() - start_tic) > timeout):
+                raise ClusterTimeoutError(
+                    'Timeout getting result for job %s in state %s after'
+                    ' more than %0.3fs'
+                    % (self.job_name, self._status, timeout))
 
             # Wait before refreshing the status of the job or timeout
-            time.sleep(self._executor.poll_interval)
+            interval = self._executor.poll_interval
+            logger.debug('Waiting %0.3fs for the result of %s in state %s',
+                         interval, self.job_name, self._status)
+            time.sleep(interval)
 
     def exception(self, timeout=None):
         start_tic = time.time()
         while True:
             self._executor._update_job_status(self)
             if self._status == CANCELLED:
-                # TODO: add informative exception message
-                raise ClusterCancelledError()
+                raise ClusterCancelledError('Job %s was cancelled'
+                                            % self.job_name)
             if self._status == FINISHED:
                 return self._exception
 
-            next_tic = time.time() + self._executor.poll_interval
-            if (timeout is not None and (next_tic - start_tic) > timeout):
-                # TODO: add informative exception message
-                raise ClusterTimeoutError()
+            if (timeout is not None and (time.time() - start_tic) > timeout):
+                raise ClusterTimeoutError(
+                    'Timeout getting exception for job %s in state %s after'
+                    ' more than %0.3fs'
+                    % (self.job_name, self._status, timeout))
 
             # Wait before refreshing the status of the job or timeout
-            time.sleep(self._executor.poll_interval)
+            interval = self._executor.poll_interval
+            logger.debug('Waiting %0.3fs for the exception of %s in state %s',
+                         interval, self.job_name, self._status)
+            time.sleep(interval)
 
 
 def _make_cancellation_handler(job_folder, running_marker):

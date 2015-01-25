@@ -7,7 +7,7 @@ import logging
 logging.basicConfig(format='%(levelname)s: %(message)s', level=logging.INFO)
 
 
-with ClusterExecutor(poll_interval=1) as e:
+with ClusterExecutor(poll_interval=.1) as e:
     # Parallel map
     values = list(range(1, 11))
     print("About to call 'log' on values %r in parallel:" % values)
