@@ -13,6 +13,9 @@ from clusterlib.futures import AtomicMarker
 from clusterlib.testing import TemporaryDirectory, skip_if_no_backend
 
 
+BASES_SHARED_FOLDER = '.'  # assume that the CWD is shared on the cluster
+
+
 def _increment(a, step=1, raise_exc=None):
     """Dummy test function to call in parallel"""
     if raise_exc is not None:
@@ -30,7 +33,7 @@ def _raise_exc(exc):
 
 
 def test_atomic_markers():
-    with TemporaryDirectory() as test_folder:
+    with TemporaryDirectory(dir=BASES_SHARED_FOLDER) as test_folder:
         with AtomicMarker(test_folder, 'marker') as marker:
             assert_true(marker.isset())
 
@@ -69,7 +72,7 @@ def test_atomic_markers():
 
 
 def test_executor_folder():
-    with TemporaryDirectory() as test_folder:
+    with TemporaryDirectory(dir=BASES_SHARED_FOLDER) as test_folder:
         cluster_folder = os.path.join(test_folder, 'clusterlib')
         with ClusterExecutor(folder=cluster_folder):
             # Check that the work folder of the executor was initialized
@@ -78,7 +81,7 @@ def test_executor_folder():
 
 @skip_if_no_backend
 def test_executor_map():
-    with TemporaryDirectory() as test_folder:
+    with TemporaryDirectory(dir=BASES_SHARED_FOLDER) as test_folder:
         cluster_folder = os.path.join(test_folder, 'clusterlib')
         with ClusterExecutor(folder=cluster_folder, poll_interval=1) as e:
             results = e.map(_increment, range(10))
@@ -102,7 +105,7 @@ def test_executor_map():
 
 @skip_if_no_backend
 def test_executor_submit():
-    with TemporaryDirectory() as test_folder:
+    with TemporaryDirectory(dir=BASES_SHARED_FOLDER) as test_folder:
         cluster_folder = os.path.join(test_folder, 'clusterlib')
         with ClusterExecutor(folder=cluster_folder, poll_interval=1) as e:
             f1 = e.submit(_increment, 1)
@@ -144,7 +147,7 @@ def test_executor_submit():
 
 @skip_if_no_backend
 def test_executor_cancel():
-    with TemporaryDirectory() as test_folder:
+    with TemporaryDirectory(dir=BASES_SHARED_FOLDER) as test_folder:
         cluster_folder = os.path.join(test_folder, 'clusterlib')
         with ClusterExecutor(folder=cluster_folder, poll_interval=1) as e:
             f1 = e.submit(sleep, 100)
