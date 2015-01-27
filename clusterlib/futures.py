@@ -415,7 +415,7 @@ def _job_log(message):
     job_name = os.environ.get('JOB_NAME', os.environ.get('SLURM_JOB_NAME'))
     job_id = os.environ.get('JOB_ID', os.environ.get('SLURM_JOB_ID'))
     if job_name is not None and job_id is not None:
-        message = ("[%s|%s] " % (jobname, job_id) + message
+        message = ("[%s|%s] " % (job_name, job_id)) + message
     print(message, file=sys.stderr)
     sys.stderr.flush()
 
@@ -461,9 +461,9 @@ def execute_job(job_folder):
         # Register a signal handler to capture job cancellation signals such
         # as a triggered by SLURM's scancel command.
         handler = _make_cancellation_handler(job_folder, running_marker)
-        for s in CANCELLATION_SIGNALS:
+        for signum in CANCELLATION_SIGNALS:
             _job_log("Registering handler for signal %d" % signum)
-            signal.signal(s, handler)
+            signal.signal(signum, handler)
 
         try:
             _job_log("Loading callable and arguments")
