@@ -32,6 +32,13 @@ def _raise_exc(exc):
     """Dummy function to """
     raise exc
 
+# Common  executor params for the tests: jobs are expected to be shorter
+# than usual for the tests hence we don't use the default parameters
+EXECUTOR_PARAMS = {
+     'poll_interval': 1,
+     'job_max_time': '00:05:00',
+}
+
 
 def test_atomic_markers():
     with TemporaryDirectory(dir=BASES_SHARED_FOLDER) as test_folder:
@@ -84,7 +91,7 @@ def test_executor_folder():
 def test_executor_map():
     with TemporaryDirectory(dir=BASES_SHARED_FOLDER) as test_folder:
         cluster_folder = os.path.join(test_folder, 'clusterlib')
-        with ClusterExecutor(folder=cluster_folder, poll_interval=1) as e:
+        with ClusterExecutor(folder=cluster_folder, **EXECUTOR_PARAMS) as e:
             results = e.map(_increment, range(10))
             assert_equal(list(results), list(range(1, 11)))
 
@@ -107,7 +114,7 @@ def test_executor_map():
 def test_executor_submit():
     with TemporaryDirectory(dir=BASES_SHARED_FOLDER) as test_folder:
         cluster_folder = os.path.join(test_folder, 'clusterlib')
-        with ClusterExecutor(folder=cluster_folder, poll_interval=1) as e:
+        with ClusterExecutor(folder=cluster_folder, **EXECUTOR_PARAMS) as e:
             f1 = e.submit(_increment, 1)
             f2 = e.submit(_increment, 2)
 
@@ -149,7 +156,7 @@ def test_executor_submit():
 def test_executor_job_duplication():
     with TemporaryDirectory(dir=BASES_SHARED_FOLDER) as test_folder:
         cluster_folder = os.path.join(test_folder, 'clusterlib')
-        with ClusterExecutor(folder=cluster_folder, poll_interval=1) as e:
+        with ClusterExecutor(folder=cluster_folder, **EXECUTOR_PARAMS) as e:
             f1 = e.submit(sleep, 100)
             f2 = e.submit(sleep, 100)
 
@@ -181,7 +188,7 @@ def _check_self_is_running():
 def test_running_marker_from_job():
     with TemporaryDirectory(dir=BASES_SHARED_FOLDER) as test_folder:
         cluster_folder = os.path.join(test_folder, 'clusterlib')
-        with ClusterExecutor(folder=cluster_folder, poll_interval=1) as e:
+        with ClusterExecutor(folder=cluster_folder, **EXECUTOR_PARAMS) as e:
             f = e.submit(_check_self_is_running)
             assert_true(f.result())
 
@@ -197,7 +204,7 @@ def _send_signal_to_self(signum):
 def test_executor_cancel_by_signal():
     with TemporaryDirectory(dir=BASES_SHARED_FOLDER) as test_folder:
         cluster_folder = os.path.join(test_folder, 'clusterlib')
-        with ClusterExecutor(folder=cluster_folder, poll_interval=1) as e:
+        with ClusterExecutor(folder=cluster_folder, **EXECUTOR_PARAMS) as e:
             futures = [e.submit(_send_signal_to_self, s)
                        for s in CANCELLATION_SIGNALS]
             for f in futures:
@@ -230,7 +237,7 @@ def test_executor_cancel_by_signal():
 def test_executor_cancel():
     with TemporaryDirectory(dir=BASES_SHARED_FOLDER) as test_folder:
         cluster_folder = os.path.join(test_folder, 'clusterlib')
-        with ClusterExecutor(folder=cluster_folder, poll_interval=1) as e:
+        with ClusterExecutor(folder=cluster_folder, **EXECUTOR_PARAMS) as e:
             f1 = e.submit(sleep, 100)
             f2 = e.submit(sleep, 200)
 
