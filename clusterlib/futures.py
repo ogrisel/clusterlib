@@ -275,7 +275,7 @@ class ClusterExecutor(object):
         for i in range(n_retries):
             try:
                 f = self._get_finished_future(
-                    future.job_folder, future.job_name, future._callable,
+                    future._job_folder, future.job_name, future._callable,
                     future._input_args, future._input_kwargs)
                 if f is not None:
                     future._status = f._status
