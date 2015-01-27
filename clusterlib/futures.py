@@ -8,6 +8,7 @@ https://docs.python.org/3/library/concurrent.futures.html
 # Authors: Olivier Grisel
 #
 # License: BSD 3 clause
+from __future__ import print_function
 import os
 import os.path as op
 import time
@@ -404,10 +405,24 @@ class ClusterFuture(object):
             time.sleep(interval)
 
 
+#
+# The followin functions are meant to be executed on the scheduler worker
+# processes: log debug and error message on stderr to leverage the stderr
+# captures provided by the scheduler systems.
+#
+
+def _job_log(message):
+    job_name = os.environ.get('JOB_NAME', os.environ.get('SLURM_JOB_NAME'))
+    job_id = os.environ.get('JOB_ID', os.environ.get('SLURM_JOB_ID'))
+    if job_name is not None and job_id is not None:
+        message = ("[%s|%s] " % (jobname, job_id) + message
+    print(message, file=sys.stderr)
+    sys.stderr.flush()
+
+
 def _make_cancellation_handler(job_folder, running_marker):
     def handler(signum, frame):
-        logger.debug("job in %s interrupted by signal %d",
-                     job_folder, signum)
+        _job_log("Job interrupted by signal %d" % signum)
         AtomicMarker(job_folder, 'cancelled').set()
         running_marker.unset()
         sys.exit(0)
@@ -431,36 +446,42 @@ def execute_job(job_folder):
     if running_marker.isset():
         # A concurrent worker is already running the same task: do not
         # duplicate work to avoid corrupting the output.
+        _job_log("The same job is concurrently running twice: skipping")
         return
 
     # Put the running marker into this job folder. Creating a symlink
     # is an atomic operation. This marker therefore also serves as
     # protection against concurrent execution of the same job twice.
     with running_marker:
-        # Register a signal handler to capture job cancellation signals such
-        # as a triggered by SLURM's scancel command.
-        handler = _make_cancellation_handler(job_folder, running_marker)
-        for s in CANCELLATION_SIGNALS:
-            signal.signal(s, handler)
-
         # Make it possible for the callable to introspect its clusterlib
         # job_folder by passing it as an environment variable. This
         # is mostly useful for testing and debuging
         os.environ['CLUSTERLIB_JOB_FOLDER'] = job_folder
+
+        # Register a signal handler to capture job cancellation signals such
+        # as a triggered by SLURM's scancel command.
+        handler = _make_cancellation_handler(job_folder, running_marker)
+        for s in CANCELLATION_SIGNALS:
+            _job_log("Registering handler for signal %d" % signum)
+            signal.signal(s, handler)
+
         try:
+            _job_log("Loading callable and arguments")
             func = _load(op.join(job_folder, 'callable.pkl'))
             args, kwargs = _load(op.join(job_folder, 'input.pkl'),
                                  mmap_mode='r')
 
             cancel_marker = AtomicMarker(job_folder, 'cancelled')
             if cancel_marker.isset():
-                # The job was cancelled concurrently.
+                _job_log("The job was cancelled concurrently")
                 return
 
+            _job_log("Executing callable: %r" % func)
             results = func(*args, **kwargs)
+            _job_log("Writing results")
             _dump(results, op.join(job_folder, 'output.pkl'))
         except Exception as e:
-            logger.debug("Job in %s raised %s", job_folder)
+            _job_log("Exception raised: %s" % e)
             _dump(e, op.join(job_folder, 'exception.pkl'))
 
 
