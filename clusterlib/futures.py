@@ -16,7 +16,7 @@ import logging
 import joblib
 import signal
 
-from clusterlib.scheduler import submit
+from clusterlib.scheduler import submit, queued_or_running_jobs
 
 logger = logging.getLogger('clusterlib')
 TRACE = logging.DEBUG - 5  # Even more verbose than DEBUG
@@ -266,7 +266,7 @@ class ClusterExecutor(object):
         # or silently cancelled by the scheduler (e.g. with a manual qdel)
         # before the start of the execution
         if is_queued_or_running:
-            futures._status = PENDING
+            future._status = PENDING
         else:
             cancel_marker.set()
             future._status = CANCELLED
@@ -275,7 +275,7 @@ class ClusterExecutor(object):
         for i in range(n_retries):
             try:
                 f = self._get_finished_future(
-                    job_folder, future.job_name, future._callable,
+                    future.job_folder, future.job_name, future._callable,
                     future._input_args, future._input_kwargs)
                 if f is not None:
                     future._status = f._status
@@ -291,7 +291,7 @@ class ClusterExecutor(object):
                     pause_duration = 5
                     logger.debug('Sleeping %d seconds before next retry',
                                  pause_duration)
-                    sleep(pause_duration)
+                    time.sleep(pause_duration)
                 else:
                     # Retry credits exhausted: re-raise the exception to the
                     # caller
