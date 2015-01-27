@@ -37,6 +37,7 @@ def _raise_exc(exc):
 EXECUTOR_PARAMS = {
      'poll_interval': 1,
      'job_max_time': '300',  # XXX: in seconds for now due to to SGE limitation
+     'min_memory': 300,
 }
 
 
