@@ -427,27 +427,22 @@ def execute_job(job_folder):
     state markers via symbolic links also stored in the job folder.
 
     """
-    cancel_marker = AtomicMarker(job_folder, 'cancelled')
-    if cancel_marker.isset():
-        # The job was cancelled concurrently.
-        return
-
     running_marker = AtomicMarker(job_folder, 'running')
     if running_marker.isset():
         # A concurrent worker is already running the same task: do not
         # duplicate work to avoid corrupting the output.
         return
 
-    # Register a signal handler to capture job cancellation signals such
-    # as a triggered by a qdel event under SGE
-    handler = _make_cancellation_handler(job_folder, running_marker)
-    for s in CANCELLATION_SIGNALS:
-        signal.signal(s, handler)
-
     # Put the running marker into this job folder. Creating a symlink
     # is an atomic operation. This marker therefore also serves as
     # protection against concurrent execution of the same job twice.
     with running_marker:
+        # Register a signal handler to capture job cancellation signals such
+        # as a triggered by SLURM's scancel command.
+        handler = _make_cancellation_handler(job_folder, running_marker)
+        for s in CANCELLATION_SIGNALS:
+            signal.signal(s, handler)
+
         # Make it possible for the callable to introspect its clusterlib
         # job_folder by passing it as an environment variable. This
         # is mostly useful for testing and debuging
@@ -456,6 +451,12 @@ def execute_job(job_folder):
             func = _load(op.join(job_folder, 'callable.pkl'))
             args, kwargs = _load(op.join(job_folder, 'input.pkl'),
                                  mmap_mode='r')
+
+            cancel_marker = AtomicMarker(job_folder, 'cancelled')
+            if cancel_marker.isset():
+                # The job was cancelled concurrently.
+                return
+
             results = func(*args, **kwargs)
             _dump(results, op.join(job_folder, 'output.pkl'))
         except Exception as e:
