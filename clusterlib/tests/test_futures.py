@@ -36,7 +36,7 @@ def _raise_exc(exc):
 # than usual for the tests hence we don't use the default parameters
 EXECUTOR_PARAMS = {
      'poll_interval': 1,
-     'job_max_time': '00:05:00',
+     'job_max_time': '300',  # XXX: in seconds for now due to to SGE limitation
 }
 
 
