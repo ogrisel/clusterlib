@@ -258,13 +258,13 @@ class ClusterExecutor(object):
                 running_marker.unset()
             return
 
-        if self._update_if_finished(future):
+        if self._update_finished_job_status(future):
             # The job has finished (yield either a result or an exception)
             return
 
-        # At this point, any unfinished an not running job are either pending
-        # or silently cancelled by the scheduler (e.g. with a manual qdel)
-        # before the start of the execution
+        # At this point, any unfinished (and not running) job is either pending
+        # or silently cancelled by the scheduler before the start of the
+        # execution (e.g. via a manual call to qdel)
         if is_queued_or_running:
             future._status = PENDING
         else:
