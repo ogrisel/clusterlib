@@ -234,32 +234,68 @@ class ClusterExecutor(object):
 
     def _update_job_status(self, future):
         job_folder = op.join(self.folder, future.job_name)
-        cancel_marker = op.join(job_folder, 'cancelled')
-        if op.islink(cancel_marker) or op.exists(cancel_marker):
+        cancel_marker = AtomicMarker(job_folder, 'cancelled')
+        if cancel_marker.isset():
             future._status = CANCELLED
             return
 
-        running_marker = op.join(job_folder, 'running')
-        if op.islink(running_marker) or op.exists(running_marker):
-            # TODO: it might be good to check with the queue system
-            # that there is actually a worker executing this task and
-            # that is has not crashed without removing the running marker
-            # for instance by with a segfault
-            future._status = RUNNING
+        # Check whether the job is active according to the scheduler
+        is_queued_or_running = future.job_name in queued_or_running_jobs()
+
+        running_marker = AtomicMarker(job_folder, 'running')
+        if running_marker.isset():
+            if is_queued_or_running:
+                # Everything looks fine
+                future._status = RUNNING
+            else:
+                # The jobs must have silently crashed or be killed without
+                # a receiving a SIGTERM signal first.
+                e = RuntimeError('%s terminated silently while running'
+                                 % future.job_name)
+                _dump(e, op.join(job_folder, 'exception.pkl'))
+
+                # Cleanup the left-over marker:
+                running_marker.unset()
             return
 
-        f = self._get_finished_future(
-            job_folder, future.job_name, future._callable, future._input_args,
-            future._input_kwargs)
-        if f is not None:
-            future._status = f._status
-            future._result = f._result
-            future._exception = f._exception
+        if self._update_if_finished(future):
+            # The job has finished (yield either a result or an exception)
             return
 
-        # TODO: otherwise the job is probably queued. This should be checked.
-        # if this is not the case we should put a RuntimeError instance
-        # as the exception and mark the f._status as FINISHED
+        # At this point, any unfinished an not running job are either pending
+        # or silently cancelled by the scheduler (e.g. with a manual qdel)
+        # before the start of the execution
+        if is_queued_or_running:
+            futures._status = PENDING
+        else:
+            cancel_marker.set()
+            future._status = CANCELLED
+
+    def _update_finished_job_status(self, future, n_retries=3):
+        for i in range(n_retries):
+            try:
+                f = self._get_finished_future(
+                    job_folder, future.job_name, future._callable,
+                    future._input_args, future._input_kwargs)
+                if f is not None:
+                    future._status = f._status
+                    future._result = f._result
+                    future._exception = f._exception
+                    return True
+                else:
+                    return False
+            except EOFError:
+                # This can happen if the worker is concurrently serializing
+                # the output or the exception.
+                if i < n_retries:
+                    pause_duration = 5
+                    logger.debug('Sleeping %d seconds before next retry',
+                                 pause_duration)
+                    sleep(pause_duration)
+                else:
+                    # Retry credits exhausted: re-raise the exception to the
+                    # caller
+                    raise
 
 
 class ClusterFuture(object):
@@ -391,6 +427,11 @@ def execute_job(job_folder):
     state markers via symbolic links also stored in the job folder.
 
     """
+    cancel_marker = AtomicMarker(job_folder, 'cancelled')
+    if cancel_marker.isset():
+        # The job was cancelled concurrently.
+        return
+
     running_marker = AtomicMarker(job_folder, 'running')
     if running_marker.isset():
         # A concurrent worker is already running the same task: do not
