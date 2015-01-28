@@ -35,9 +35,9 @@ def _raise_exc(exc):
 # Common  executor params for the tests: jobs are expected to be shorter
 # than usual for the tests hence we don't use the default parameters
 EXECUTOR_PARAMS = {
-     'poll_interval': 1,
-     'job_max_time': '300',  # XXX: in seconds for now due to to SGE limitation
-     'min_memory': 300,
+    'poll_interval': 1,
+    'job_max_time': '300',  # XXX: in seconds for now due to to SGE limitation
+    'min_memory': 300,
 }
 
 

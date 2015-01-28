@@ -17,6 +17,7 @@ import logging
 import joblib
 import signal
 import errno
+from uuid import uuid4
 
 from clusterlib.scheduler import submit, queued_or_running_jobs
 
@@ -101,11 +102,21 @@ class AtomicMarker(object):
 
     def isset(self):
         """Check the presence of the marker"""
-        return op.islink(self.marker_path)
+        probe = op.join(self.marker_path, uuid4().hex)
+        try:
+            os.mkdir(probe)
+        except OSError as e:
+            if e.errno == errno.ENOENT:
+                return False
+            raise
+        finally:
+            if op.exists(probe):
+                os.rmdir(probe)
+        return True
 
     def set(self):
         try:
-            os.symlink(self.marker_path, self.marker_path)
+            os.mkdir(self.marker_path)
             return True
         except OSError as e:
             if e.errno == errno.EEXIST and not self.raise_if_exists:
@@ -117,7 +128,7 @@ class AtomicMarker(object):
     def unset(self):
         """Ensure that the marker has been removed"""
         try:
-            os.unlink(self.marker_path)
+            os.rmdir(self.marker_path)
             return True
         except OSError as e:
             if e.errno == errno.ENOENT:
