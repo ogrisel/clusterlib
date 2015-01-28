@@ -248,6 +248,7 @@ class ClusterExecutor(object):
             if is_queued_or_running:
                 # Everything looks fine
                 future._status = RUNNING
+                return
             else:
                 # The jobs must have silently crashed or be killed without
                 # a receiving a SIGTERM signal first.
@@ -257,7 +258,6 @@ class ClusterExecutor(object):
 
                 # Cleanup the left-over marker:
                 running_marker.unset()
-            return
 
         if self._update_finished_job_status(future):
             # The job has finished (yield either a result or an exception)
