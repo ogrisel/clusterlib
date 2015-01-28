@@ -16,6 +16,7 @@ import sys
 import logging
 import joblib
 import signal
+import errno
 
 from clusterlib.scheduler import submit, queued_or_running_jobs
 
@@ -107,7 +108,7 @@ class AtomicMarker(object):
             os.symlink(self.marker_path, self.marker_path)
             return True
         except OSError as e:
-            if e.errno == 17 and not self.raise_if_exists:
+            if e.errno == errno.EEXIST and not self.raise_if_exists:
                 # marker has already been set, ignoring
                 return False
             else:
@@ -119,7 +120,7 @@ class AtomicMarker(object):
             os.unlink(self.marker_path)
             return True
         except OSError as e:
-            if e.errno == 2:
+            if e.errno == errno.ENOENT:
                 # marker has already been unset: ignore
                 return False
             else:
