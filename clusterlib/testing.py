@@ -36,8 +36,10 @@ class TemporaryDirectory(object):
     name = None
     _closed = False
 
-    def __init__(self, suffix="", prefix="tmp", dir=None):
+    def __init__(self, suffix="", prefix="tmp", dir=None,
+                 delete_on_exit=True):
         self.name = mkdtemp(suffix, prefix, dir)
+        self.delete_on_exit = delete_on_exit
 
     @classmethod
     def _cleanup(cls, name, warn_message=None):
@@ -52,7 +54,8 @@ class TemporaryDirectory(object):
         return self.name
 
     def __exit__(self, exc, value, tb):
-        self.cleanup()
+        if self.delete_on_exit:
+            self.cleanup()
 
     def cleanup(self):
         if self.name is not None and not self._closed:

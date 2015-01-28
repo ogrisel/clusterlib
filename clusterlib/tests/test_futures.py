@@ -36,8 +36,8 @@ def _raise_exc(exc):
 # than usual for the tests hence we don't use the default parameters
 EXECUTOR_PARAMS = {
     'poll_interval': 1,
-    'job_max_time': '300',  # XXX: in seconds for now due to to SGE limitation
-    'min_memory': 300,
+    'job_max_time': '1:00:00',
+    'min_memory': 500,
 }
 
 
@@ -113,7 +113,7 @@ def test_executor_map():
 
 @skip_if_no_backend
 def test_executor_submit():
-    with TemporaryDirectory(dir=TEST_SHARED_FOLDER) as test_folder:
+    with TemporaryDirectory(dir=TEST_SHARED_FOLDER, delete_on_exit=False) as test_folder:
         cluster_folder = os.path.join(test_folder, 'clusterlib')
         with ClusterExecutor(folder=cluster_folder, **EXECUTOR_PARAMS) as e:
             f1 = e.submit(_increment, 1)

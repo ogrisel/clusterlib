@@ -11,12 +11,13 @@ https://docs.python.org/3/library/concurrent.futures.html
 from __future__ import print_function
 import os
 import os.path as op
-import time
+from time import time, sleep
 import sys
 import logging
 import joblib
 import signal
 import errno
+import shutil
 from uuid import uuid4
 
 from clusterlib.scheduler import submit, queued_or_running_jobs
@@ -35,6 +36,7 @@ CANCELLATION_SIGNALS = [
     signal.SIGABRT,
     signal.SIGQUIT,
 ]
+MAX_FS_CACHE_DELAY = 100
 
 
 try:
@@ -105,14 +107,14 @@ class AtomicMarker(object):
         probe = op.join(self.marker_path, uuid4().hex)
         try:
             os.mkdir(probe)
+            return True
         except OSError as e:
             if e.errno == errno.ENOENT:
                 return False
             raise
         finally:
             if op.exists(probe):
-                os.rmdir(probe)
-        return True
+                shutil.rmtree(probe)
 
     def set(self):
         try:
@@ -223,7 +225,8 @@ class ClusterExecutor(object):
         # TODO: pass additional cluster options here
         submit_cmd = submit(cmd, job_name=job_name, time=self.job_max_time,
                             memory=self.min_memory, backend=self.backend)
-        logger.log(TRACE, submit_cmd)
+        #logger.log(TRACE, submit_cmd)
+        logger.debug(submit_cmd)
         code = os.system(submit_cmd)
         if code != 0:
             raise RuntimeError('Command "%s" returned code %s'
@@ -232,7 +235,7 @@ class ClusterExecutor(object):
     def map(self, fn, *iterables, **kwargs):
         timeout = kwargs.get('timeout')  # Python 2 compat
         if timeout is not None:
-            end_time = timeout + time.time()
+            end_time = timeout + time()
 
         futures = [self.submit(fn, *args) for args in zip(*iterables)]
         try:
@@ -240,47 +243,86 @@ class ClusterExecutor(object):
                 if timeout is None:
                     yield future.result()
                 else:
-                    yield future.result(timeout=end_time - time.time())
+                    yield future.result(timeout=end_time - time())
         finally:
             for future in futures:
                 future.cancel()
 
     def _update_job_status(self, future):
+        # Check whether the job is active according to the scheduler
+        is_queued_or_running = future.job_name in queued_or_running_jobs()
+        if is_queued_or_running:
+             logger.debug('job %s is queued or running according to scheduler',
+                          future.job_name)
+        else:
+             logger.debug('job %s is no longer referenced in the scheduler',
+                          future.job_name)
+
+	# Introspect the markers in the job folder
         job_folder = op.join(self.folder, future.job_name)
+
         cancel_marker = AtomicMarker(job_folder, 'cancelled')
         if cancel_marker.isset():
+            logger.debug('job %s has the "cancelled" marker', future.job_name)
             future._status = CANCELLED
             return
 
-        # Check whether the job is active according to the scheduler
-        is_queued_or_running = future.job_name in queued_or_running_jobs()
+        finished_marker = AtomicMarker(job_folder, 'finished')
+        if finished_marker.isset():
+            logger.debug('job %s has the "finished" marker enabled',
+                         future.job_name)
+            if self._update_finished_job_status(future):
+                logger.debug('job %s is in state "finished"', future.job_name)
+                # The job has finished (yield either a result or an exception)
+                return
+            else:
+                start_time = future._wait_for_results_start_time
+                if start_time is None:
+                    future._wait_for_results_start_time = start_time = time()
+                elif (time() - start_time) > MAX_FS_CACHE_DELAY:
+                    future._exception = OSError(
+                        'Time exceeded while reading results from parallel'
+                        ' filesystem for job %s' % future.job_name)
+                    future._status = FINISHED
+                    return
+
+                logger.debug('job %s waiting the results in state "running"',
+                             future.job_name)
+                future._status = RUNNING
+                return
 
         running_marker = AtomicMarker(job_folder, 'running')
         if running_marker.isset():
+            logger.debug('job %s has the "running" marker', future.job_name)
             if is_queued_or_running:
+                logger.debug('job %s is in state "running"', future.job_name)
                 # Everything looks fine
                 future._status = RUNNING
                 return
             else:
                 # The jobs must have silently crashed or be killed without
                 # a receiving a SIGTERM signal first.
+                logger.debug('marking job %s as crashed with an exception',
+                             future.job_name)
                 e = RuntimeError('%s terminated silently while running'
                                  % future.job_name)
                 _dump(e, op.join(job_folder, 'exception.pkl'))
-
-                # Cleanup the left-over marker:
+                # Mark finished and cleanup the running marker:
+                finished_marker.set()
                 running_marker.unset()
 
-        if self._update_finished_job_status(future):
-            # The job has finished (yield either a result or an exception)
-            return
+                # Let the next iteration collect the finished results as usual
+                future._status = RUNNING
+                return
 
         # At this point, any unfinished (and not running) job is either pending
         # or silently cancelled by the scheduler before the start of the
         # execution (e.g. via a manual call to qdel)
         if is_queued_or_running:
+            logger.debug('job %s is in state "pending"', future.job_name)
             future._status = PENDING
         else:
+            logger.debug('job %s is in state "cancelled"', future.job_name)
             cancel_marker.set()
             future._status = CANCELLED
 
@@ -304,7 +346,7 @@ class ClusterExecutor(object):
                     pause_duration = 5
                     logger.debug('Sleeping %d seconds before next retry',
                                  pause_duration)
-                    time.sleep(pause_duration)
+                    sleep(pause_duration)
                 else:
                     # Retry credits exhausted: re-raise the exception to the
                     # caller
@@ -324,6 +366,7 @@ class ClusterFuture(object):
         self._result = result
         self._exception = exception
         self._status = status
+        self._wait_for_results_start_time = None
 
     def cancel(self, interrupt_running=False):
         """Remove the job from the queue.
@@ -369,7 +412,7 @@ class ClusterFuture(object):
         return self._status == FINISHED
 
     def result(self, timeout=None):
-        start_tic = time.time()
+        start_tic = time()
         while True:
             self._executor._update_job_status(self)
             if self._status == CANCELLED:
@@ -382,7 +425,7 @@ class ClusterFuture(object):
                     raise self._exception
                 return self._result
 
-            if (timeout is not None and (time.time() - start_tic) > timeout):
+            if (timeout is not None and (time() - start_tic) > timeout):
                 raise ClusterTimeoutError(
                     'Timeout getting result for job %s in state %s after'
                     ' more than %0.3fs'
@@ -392,10 +435,10 @@ class ClusterFuture(object):
             interval = self._executor.poll_interval
             logger.debug('Waiting %0.3fs for the result of %s in state %s',
                          interval, self.job_name, self._status)
-            time.sleep(interval)
+            sleep(interval)
 
     def exception(self, timeout=None):
-        start_tic = time.time()
+        start_tic = time()
         while True:
             self._executor._update_job_status(self)
             if self._status == CANCELLED:
@@ -404,7 +447,7 @@ class ClusterFuture(object):
             if self._status == FINISHED:
                 return self._exception
 
-            if (timeout is not None and (time.time() - start_tic) > timeout):
+            if (timeout is not None and (time() - start_tic) > timeout):
                 raise ClusterTimeoutError(
                     'Timeout getting exception for job %s in state %s after'
                     ' more than %0.3fs'
@@ -414,7 +457,7 @@ class ClusterFuture(object):
             interval = self._executor.poll_interval
             logger.debug('Waiting %0.3fs for the exception of %s in state %s',
                          interval, self.job_name, self._status)
-            time.sleep(interval)
+            sleep(interval)
 
 
 #
@@ -454,7 +497,13 @@ def execute_job(job_folder):
     state markers via symbolic links also stored in the job folder.
 
     """
+    finished_marker = AtomicMarker(job_folder, 'finished')
     running_marker = AtomicMarker(job_folder, 'running')
+    cancel_marker = AtomicMarker(job_folder, 'cancelled')
+    if finished_marker.isset():
+        _job_log("The same job has already completed in the past: skipping")
+        return
+
     if running_marker.isset():
         # A concurrent worker is already running the same task: do not
         # duplicate work to avoid corrupting the output.
@@ -483,7 +532,6 @@ def execute_job(job_folder):
             args, kwargs = _load(op.join(job_folder, 'input.pkl'),
                                  mmap_mode='r')
 
-            cancel_marker = AtomicMarker(job_folder, 'cancelled')
             if cancel_marker.isset():
                 _job_log("The job was cancelled concurrently")
                 return
@@ -495,6 +543,8 @@ def execute_job(job_folder):
         except Exception as e:
             _job_log("Exception raised: %s" % e)
             _dump(e, op.join(job_folder, 'exception.pkl'))
+        finished_marker.set()
+        _job_log("Set the 'finished' marker: %r" % finished_marker.isset())
 
 
 if __name__ == '__main__':
