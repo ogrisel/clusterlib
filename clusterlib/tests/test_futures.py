@@ -175,7 +175,7 @@ def test_executor_job_duplication():
                 assert_true(f1.running())
 
             # Cancelling one job will automatically cancel the other
-            assert_true(f2.cancel(interrupt_running=True)
+            assert_true(f2.cancel(interrupt_running=True))
             assert_true(f1.cancelled())
             assert_true(f2.cancelled())
 
