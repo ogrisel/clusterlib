@@ -567,8 +567,8 @@ def execute_job(job_folder):
     # Put the running marker into this job folder. This marke also serves as
     # a protection against concurrent execution of the same job twice.
     try:
-        owner_of_running_marker = not running_marker.set()
-        if owner_of_running_marker:
+        owner_of_running_marker = running_marker.set()
+        if not owner_of_running_marker:
             # The running_marker was already set by some past or concurrent
             # process: do not duplicate work to avoid corrupting the output
             # with concurrent writes to the same file(s).
