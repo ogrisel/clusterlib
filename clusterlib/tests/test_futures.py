@@ -77,7 +77,6 @@ def test_atomic_markers():
             assert_true(marker3.isset())
             assert_true(marker.isset())
 
-
         # Outside the with block the marker is unset
         assert_false(marker.isset())
         assert_false(marker3.isset())
@@ -89,7 +88,6 @@ def test_atomic_markers():
         assert_true(marker3.set())
         assert_true(marker.isset())
         assert_true(marker3.isset())
-
 
 
 def test_executor_folder():

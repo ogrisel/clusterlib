@@ -447,8 +447,9 @@ class ClusterFuture(object):
         if self._status == CANCELLED:
             return True
 
-        # We use a symlink as job cancelation marker as creating and deleting
-        # a symlink is a cheap and atomic operations under Unix / NFS
+        # We use a directory as job cancelation marker as creating and
+        # deleting a directory is a cheap and atomic operations under
+        # Unix / NFS
         AtomicMarker(self._job_folder, 'cancelled').set()
         self._status = CANCELLED
 
@@ -563,16 +564,17 @@ def execute_job(job_folder):
         _job_log("The same job has already completed in the past: skipping")
         return
 
-    if running_marker.isset():
-        # A concurrent worker is already running the same task: do not
-        # duplicate work to avoid corrupting the output.
-        _job_log("The same job is concurrently running twice: skipping")
-        return
+    # Put the running marker into this job folder. This marke also serves as
+    # a protection against concurrent execution of the same job twice.
+    try:
+        owner_of_running_marker = not running_marker.set()
+        if owner_of_running_marker:
+            # The running_marker was already set by some past or concurrent
+            # process: do not duplicate work to avoid corrupting the output
+            # with concurrent writes to the same file(s).
+            _job_log("The same job is concurrently running: skipping")
+            return
 
-    # Put the running marker into this job folder. Creating a symlink
-    # is an atomic operation. This marker therefore also serves as
-    # protection against concurrent execution of the same job twice.
-    with running_marker:
         # Make it possible for the callable to introspect its clusterlib
         # job_folder by passing it as an environment variable. This
         # is mostly useful for testing and debuging
@@ -602,8 +604,12 @@ def execute_job(job_folder):
         except Exception as e:
             _job_log("Exception raised: %s" % e)
             _dump(e, op.join(job_folder, 'exception.pkl'))
-        finished_marker.set()
-        _job_log("Set the 'finished' marker: %r" % finished_marker.isset())
+        finished = finished_marker.set()
+        _job_log("Set the 'finished' marker: %r" % finished)
+    finally:
+        if owner_of_running_marker:
+            removed = running_marker.unset()
+            _job_log("Set the 'finished' marker: %r" % finished)
 
 
 if __name__ == '__main__':
