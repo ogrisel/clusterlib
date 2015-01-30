@@ -39,8 +39,8 @@ def _raise_exc(exc):
 # than usual for the tests hence we don't use the default parameters
 EXECUTOR_PARAMS = {
     'poll_interval': 1,
-    'job_max_time': '1:00:00',
-    'min_memory': 500,
+    'job_max_time': '00:05:00',
+    'min_memory': 100,
 }
 
 
