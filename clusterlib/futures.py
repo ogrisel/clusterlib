@@ -604,12 +604,16 @@ def execute_job(job_folder):
         except Exception as e:
             _job_log("Exception raised: %s" % e)
             _dump(e, op.join(job_folder, 'exception.pkl'))
-        finished = finished_marker.set()
-        _job_log("Set the 'finished' marker: %r" % finished)
+        if finished_marker.set():
+            _job_log("Successfully set the 'finished' marker")
+        else:
+            _job_log("ERROR: failed to set the 'finished' marker")
     finally:
         if owner_of_running_marker:
-            removed = running_marker.unset()
-            _job_log("Set the 'finished' marker: %r" % finished)
+            if running_marker.unset():
+                _job_log("Successfully unset the 'running' marker")
+            else:
+                _job_log("ERROR: failed to unset the 'running' marker")
 
 
 if __name__ == '__main__':
