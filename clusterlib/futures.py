@@ -175,7 +175,7 @@ class AtomicMarker(object):
                 else:
                     # Wait a bit and retry
                     if n_retries <= 0:
-                        raise AtomikMarkerError(
+                        raise AtomicMarkerError(
                             'Failed to set marker at "%s"'
                             % self.marker_path)
                     sleep(0.1)
