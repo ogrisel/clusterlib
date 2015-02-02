@@ -9,6 +9,7 @@ https://docs.python.org/3/library/concurrent.futures.html
 #
 # License: BSD 3 clause
 from __future__ import print_function
+from getpass import getuser
 import os
 import os.path as op
 from time import time, sleep
@@ -210,6 +211,7 @@ class ClusterExecutor(object):
         self.min_memory = min_memory
         self.job_max_time = job_max_time
         self.poll_interval = poll_interval
+        self.user = getuser()
         safe_makedirs(folder)
 
     def __enter__(self):
@@ -320,7 +322,8 @@ class ClusterExecutor(object):
 
     def _update_job_status(self, future):
         # Check whether the job is active according to the scheduler
-        is_queued_or_running = future.job_name in queued_or_running_jobs()
+        is_queued_or_running = future.job_name in queued_or_running_jobs(
+            user=self.user)
         if is_queued_or_running:
              logger.debug('job %s is queued or running according to scheduler',
                           future.job_name)
