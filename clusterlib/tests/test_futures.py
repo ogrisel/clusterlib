@@ -40,7 +40,7 @@ def _raise_exc(exc):
 EXECUTOR_PARAMS = {
     'poll_interval': 1,
     'job_max_time': '00:05:00',
-    'min_memory': 100,
+    'min_memory': 300,
 }
 
 
