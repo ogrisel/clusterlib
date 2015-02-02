@@ -221,6 +221,17 @@ class ClusterExecutor(object):
 
     def _get_finished_future(self, job_folder, job_name, fn, args, kwargs,
                              raise_on_invalid=True):
+        finished_marker = AtomicMarker(job_folder, 'finished')
+        if not finished_marker.isset():
+            return None
+
+        # Try to invalid the NFS negative-entry cache under Linux by calling
+        # chown on the parent folder without changing the id of the owner.
+        # Note: this strategy is not garanteed to work on all File Systems
+        # but has proved to help with NFSv3 clients under Linux.
+        s = os.stat(job_folder)
+        os.chown(job_folder, s.st_uid, s.st_gid)
+
         output_filename = op.join(job_folder, 'output.pkl')
         if op.exists(output_filename):
             # The same job has already been submitted in the past and
