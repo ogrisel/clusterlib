@@ -297,7 +297,7 @@ class ClusterExecutor(object):
         # TODO: pass additional cluster options here
         submit_cmd = submit(cmd, job_name=job_name, time=self.job_max_time,
                             memory=self.min_memory, backend=self.backend)
-        #logger.log(TRACE, submit_cmd)
+        # logger.log(TRACE, submit_cmd)
         logger.debug(submit_cmd)
         code = os.system(submit_cmd)
         if code != 0:
@@ -325,13 +325,13 @@ class ClusterExecutor(object):
         is_queued_or_running = future.job_name in queued_or_running_jobs(
             user=self.user)
         if is_queued_or_running:
-             logger.debug('job %s is queued or running according to scheduler',
-                          future.job_name)
+            logger.debug('job %s is queued or running according to scheduler',
+                         future.job_name)
         else:
-             logger.debug('job %s is no longer referenced in the scheduler',
-                          future.job_name)
+            logger.debug('job %s is no longer referenced in the scheduler',
+                         future.job_name)
 
-	# Introspect the markers in the job folder
+        # Introspect the markers in the job folder
         job_folder = op.join(self.folder, future.job_name)
 
         cancel_marker = AtomicMarker(job_folder, 'cancelled')
