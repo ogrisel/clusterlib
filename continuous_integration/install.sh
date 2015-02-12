@@ -13,6 +13,7 @@ set -xe # Local echo and exit on first error
 pip install coverage coveralls
 pip install sphinx_bootstrap_theme
 
+cat /etc/hosts
 
 if [[ "$SCHEDULER" == "SLURM" ]]; then
     sudo apt-get install slurm-llnl
