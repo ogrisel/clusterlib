@@ -29,7 +29,8 @@ elif [[ "$SCHEDULER" == "SGE" ]]; then
     # interface
     export USER=$(id -u -n)
     export CORES=$(grep -c '^processor' /proc/cpuinfo)
-    export HOSTNAME=$(hostname)
+    #export HOSTNAME=$(hostname)
+    export HOSTNAME="localhost"
 
     sudo apt-get update -qq
     cd continuous_integration/sge
@@ -46,15 +47,22 @@ elif [[ "$SCHEDULER" == "SGE" ]]; then
     sudo qconf -as $HOSTNAME
 
     # Configure users
-    sed -i -r "s/template/$USER/" user_template
+    sed -i "s/USER_PLACEHOLDER/$USER/g" user_template
     cat user_template
     sudo qconf -Auser user_template
     sudo qconf -au $USER arusers
 
     # Register the travis host
-    sed -i -r "s/localhost/$HOSTNAME/" host_template
+    sed -i "s/HOSTNAME_PLACEHOLDER/$HOSTNAME/g" host_template
     cat host_template
     sudo qconf -Ae host_template
+
+    # Configure the all.q queue
+    sed -i "s/HOSTNAME_PLACEHOLDER/$HOSTNAME/g" queue_template
+    sed -i "s/CORES_PLACEHOLDER/$CORES/g" queue_template
+    cat queue_template
+    sudo qconf -Ap smp_template
+    sudo qconf -Aq queue_template
 
     # Restart the exechost service
     sudo service gridengine-exec restart
@@ -62,13 +70,6 @@ elif [[ "$SCHEDULER" == "SGE" ]]; then
     ps aux | grep "sge"
     echo "The travis worker node should be registered and live:"
     qhost
-
-    # Configure the all.q queue
-    sed -i -r "s/localhost/$HOSTNAME/" queue_template
-    sed -i -r "s/UNDEFINED/$CORES/" queue_template
-    cat queue_template
-    sudo qconf -Ap smp_template
-    sudo qconf -Aq queue_template
     echo "Printing queue info to verify that things are working correctly."
     qstat -f -q all.q -explain a
 

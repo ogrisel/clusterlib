@@ -1,5 +1,5 @@
 qname all.q
-hostlist localhost
+hostlist HOSTNAME_PLACEHOLDER
 seq_no 0
 load_thresholds np_load_avg=1.75
 suspend_thresholds NONE
@@ -7,12 +7,12 @@ nsuspend 1
 suspend_interval 00:05:00
 priority 0
 min_cpu_interval 00:05:00
-processors UNDEFINED
+processors CORES_PLACEHOLDER
 qtype BATCH INTERACTIVE
 ckpt_list NONE
 pe_list make smp
 rerun FALSE
-slots UNDEFINED
+slots CORES_PLACEHOLDER
 tmpdir /tmp
 shell /bin/bash
 prolog NONE
