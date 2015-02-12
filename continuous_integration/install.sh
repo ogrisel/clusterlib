@@ -35,12 +35,11 @@ elif [[ "$SCHEDULER" == "SGE" ]]; then
     echo "gridengine-master shared/gridenginemaster string localhost" | sudo debconf-set-selections
     echo "gridengine-master shared/gridenginecell string default" | sudo debconf-set-selections
     echo "gridengine-master shared/gridengineconfig boolean true" | sudo debconf-set-selections
-    sudo apt-get install gridengine-common gridengine-master
+    sudo apt-get install gridengine-common gridengine-client gridengine-master
     sudo service gridengine-master restart
 
     # Install and configure the executor
-    sudo apt-get install gridengine-client gridengine-exec
-    sudo service gridengine-exec restart
+    sudo apt-get install gridengine-exec
 
     # Configure the travis worker as a submission host
     sudo qconf -as $HOSTNAME
@@ -51,8 +50,15 @@ elif [[ "$SCHEDULER" == "SGE" ]]; then
     sudo qconf -au $USER arusers
 
     # Register the travis host
-    sed -i -r "s/localhost/$HOSTNAME/" queue_template
+    sed -i -r "s/localhost/$HOSTNAME/" host_template
     sudo qconf -Ae host_template
+
+    # Restart the exechost service
+    sudo service gridengine-exec restart
+    echo "You should see sge_execd and sge_qmaster running below:"
+    ps aux | grep "sge"
+    echo "The travis worker node should be registered and live:"
+    qhost
 
     # Configure the all.q queue
     sed -i -r "s/localhost/$HOSTNAME/" queue_template
@@ -61,10 +67,6 @@ elif [[ "$SCHEDULER" == "SGE" ]]; then
     sudo qconf -Aq queue_template
     echo "Printing queue info to verify that things are working correctly."
     qstat -f -q all.q -explain a
-    echo "You should see sge_execd and sge_qmaster running below:"
-    ps aux | grep "sge"
-    echo "The travis worker node should be registered and live:"
-    qhost
 
     cd ../..
 
