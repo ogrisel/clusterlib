@@ -32,7 +32,7 @@ elif [[ "$SCHEDULER" == "SGE" ]]; then
 
     sudo apt-get update -qq
     cd continuous_integration/sge
-    echo "gridengine-master shared/gridenginemaster string localhost" | sudo debconf-set-selections
+    echo "gridengine-master shared/gridenginemaster string $HOSTNAME" | sudo debconf-set-selections
     echo "gridengine-master shared/gridenginecell string default" | sudo debconf-set-selections
     echo "gridengine-master shared/gridengineconfig boolean true" | sudo debconf-set-selections
     sudo apt-get install gridengine-common gridengine-client gridengine-master
@@ -46,11 +46,13 @@ elif [[ "$SCHEDULER" == "SGE" ]]; then
 
     # Configure users
     sed -i -r "s/template/$USER/" user_template
+    cat user_template
     sudo qconf -Auser user_template
     sudo qconf -au $USER arusers
 
     # Register the travis host
     sed -i -r "s/localhost/$HOSTNAME/" host_template
+    cat host_template
     sudo qconf -Ae host_template
 
     # Restart the exechost service
@@ -63,6 +65,7 @@ elif [[ "$SCHEDULER" == "SGE" ]]; then
     # Configure the all.q queue
     sed -i -r "s/localhost/$HOSTNAME/" queue_template
     sed -i -r "s/UNDEFINED/$CORES/" queue_template
+    cat queue_template
     sudo qconf -Ap smp_template
     sudo qconf -Aq queue_template
     echo "Printing queue info to verify that things are working correctly."
