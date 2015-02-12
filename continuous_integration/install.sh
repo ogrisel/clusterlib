@@ -48,24 +48,20 @@ elif [[ "$SCHEDULER" == "SGE" ]]; then
 
     # Configure users
     sed -i "s/USER_PLACEHOLDER/$USER/g" user_template
-    cat user_template
     sudo qconf -Auser user_template
     sudo qconf -au $USER arusers
 
     # Register the travis host
     sed -i "s/HOSTNAME_PLACEHOLDER/$HOSTNAME/g" host_template
-    cat host_template
     sudo qconf -Ae host_template
 
     # Configure the all.q queue
     sed -i "s/HOSTNAME_PLACEHOLDER/$HOSTNAME/g" queue_template
     sed -i "s/CORES_PLACEHOLDER/$CORES/g" queue_template
-    cat queue_template
     sudo qconf -Ap smp_template
     sudo qconf -Aq queue_template
 
-    # Restart the exechost service
-    sudo service gridengine-exec restart
+    # Check that everything is alright
     echo "You should see sge_execd and sge_qmaster running below:"
     ps aux | grep "sge"
     echo "The travis worker node should be registered and live:"
