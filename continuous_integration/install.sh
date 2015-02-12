@@ -7,7 +7,7 @@
 # License: 3-clause BSD
 
 
-set -e # Exit on first error
+set -xe # Local echo and exit on first error
 
 # Install dependency for full test
 pip install coverage coveralls
@@ -21,26 +21,41 @@ if [[ "$SCHEDULER" == "SLURM" ]]; then
     sudo python continuous_integration/configure_slurm.py
 
 elif [[ "$SCHEDULER" == "SGE" ]]; then
-    # The following lines are taken from BSD 3 project from
-    # https://github.com/drmaa-python/drmaa-python
+    # The following lines are inspired from the following blog post:
+    # http://dan-blanchard.roughdraft.io/6586533-how-to-setup-a-single-machine-sun-grid-engine-installation-for-unit-tests-on-tr
+    # The main difference is that we register the real host name as an
+    # executor rather than trying to use 'localhost' and the loopback network
+    # interface
+    export USER=$(id -u -n)
+    export CORES=$(grep -c '^processor' /proc/cpuinfo)
+    export HOSTNAME=$(hostname)
 
-    cd continuous_integration/sge
-
-    sudo sed -i -r "s/^(127.0.0.1\s)(localhost\.localdomain\slocalhost)/\1localhost localhost.localdomain $(hostname) /" /etc/hosts
     sudo apt-get update -qq
+    cd continuous_integration/sge
     echo "gridengine-master shared/gridenginemaster string localhost" | sudo debconf-set-selections
     echo "gridengine-master shared/gridenginecell string default" | sudo debconf-set-selections
     echo "gridengine-master shared/gridengineconfig boolean true" | sudo debconf-set-selections
     sudo apt-get install gridengine-common gridengine-master
-    # Do this in a separate step to give master time to start
-    sudo apt-get install libdrmaa1.0 gridengine-client gridengine-exec
-    export CORES=$(grep -c '^processor' /proc/cpuinfo)
+    sudo service gridengine-master restart
+
+    # Install and configure the executor
+    sudo apt-get install gridengine-client gridengine-exec
+    sudo service gridengine-exec restart
+
+    # Configure the travis worker as a submission host
+    sudo qconf -as $HOSTNAME
+
+    # Configure users
     sed -i -r "s/template/$USER/" user_template
     sudo qconf -Auser user_template
     sudo qconf -au $USER arusers
-    sudo qconf -as localhost
-    export LOCALHOST_IN_SEL=$(qconf -sel | grep -c 'localhost')
-    if [ $LOCALHOST_IN_SEL != "1" ]; then sudo qconf -Ae host_template; else sudo qconf -Me host_template; fi
+
+    # Register the travis host
+    sed -i -r "s/localhost/$HOSTNAME/" queue_template
+    sudo qconf -Ae host_template
+
+    # Configure the all.q queue
+    sed -i -r "s/localhost/$HOSTNAME/" queue_template
     sed -i -r "s/UNDEFINED/$CORES/" queue_template
     sudo qconf -Ap smp_template
     sudo qconf -Aq queue_template
@@ -48,11 +63,12 @@ elif [[ "$SCHEDULER" == "SGE" ]]; then
     qstat -f -q all.q -explain a
     echo "You should see sge_execd and sge_qmaster running below:"
     ps aux | grep "sge"
+    echo "The travis worker node should be registered and live:"
+    qhost
 
     cd ../..
 
     export SGE_ROOT=/var/lib/gridengine
     export SGE_CELL=default
-    export DRMAA_LIBRARY_PATH=/usr/lib/libdrmaa.so.1.0
 
  fi
