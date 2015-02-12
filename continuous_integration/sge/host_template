@@ -1,4 +1,4 @@
-hostname host_template
+hostname HOSTNAME_PLACEHOLDER
 load_scaling NONE
 complex_values NONE
 user_lists arusers
