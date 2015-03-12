@@ -18,6 +18,7 @@ import logging
 import joblib
 import signal
 import errno
+from traceback import format_exc
 from clusterlib.scheduler import submit, queued_or_running_jobs
 
 logger = logging.getLogger('clusterlib')
@@ -215,6 +216,9 @@ class ClusterExecutor(object):
             logger.debug('Loading job exception: %s', exception_filename)
             try:
                 exception = _load(exception_filename)
+                logger.debug("Loaded %s: %s", exception.__class__.__name__,
+                             exception)
+                logger.debug(format_exc(exception))
                 return ClusterFuture(job_name, job_folder, self, fn, args,
                                      kwargs, status=FINISHED,
                                      exception=exception)
@@ -573,7 +577,7 @@ def execute_job(job_folder):
                 _job_log("The job was cancelled concurrently")
                 return
 
-            _job_log("Executing callable: %r" % func)
+            _job_log ("Executing callable: %r" % func)
             results = func(*args, **kwargs)
             _job_log("Writing results")
             _dump(results, op.join(job_folder, 'output.pkl'))
