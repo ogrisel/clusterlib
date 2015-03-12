@@ -361,6 +361,7 @@ class ClusterExecutor(object):
 
     def _update_finished_job_status(self, future, n_retries=3):
         for i in range(n_retries):
+            sleep(2)
             try:
                 f = self._get_finished_future(
                     future._job_folder, future.job_name, future._callable,

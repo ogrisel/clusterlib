@@ -1,8 +1,8 @@
 language: python
 python:
   - "2.7"
-  - "3.3"
-  - "3.4"
+#  - "3.3"
+#  - "3.4"
 # command to install dependencies
 install: source continuous_integration/install.sh
 env:
@@ -13,6 +13,7 @@ env:
 # command to run tests
 script: 
   - make 
-#  - source continuous_integration/get_debug.sh
+
 after_success: coveralls  
+after_failure: source continuous_integration/get_debug.sh
 cache: apt
