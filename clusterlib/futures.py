@@ -18,7 +18,6 @@ import logging
 import joblib
 import signal
 import errno
-
 from clusterlib.scheduler import submit, queued_or_running_jobs
 
 logger = logging.getLogger('clusterlib')
@@ -323,6 +322,7 @@ class ClusterExecutor(object):
                              future.job_name)
                 future._status = RUNNING
                 return
+        sleep(3)
 
         running_marker = AtomicMarker(job_folder, 'running')
         if running_marker.isset():
