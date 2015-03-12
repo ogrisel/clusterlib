@@ -13,7 +13,7 @@ env:
 # command to run tests
 script: 
   - make 
-
+  - ./continuous_integration/get_debug.sh
 after_success: coveralls  
-after_failure: source continuous_integration/get_debug.sh
+after_failure: ./continuous_integration/get_debug.sh
 cache: apt
