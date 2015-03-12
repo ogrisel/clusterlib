@@ -43,7 +43,7 @@ try:
     class ClusterTimeoutError(TimeoutError):
         pass
 
-    class ClusterCancelledError(CancelledError):
+    class ClusterCanceledError(CancelledError):
         pass
 
 except ImportError:
@@ -475,6 +475,7 @@ class ClusterFuture(object):
         start_tic = time()
         while True:
             self._executor._update_job_status(self)
+            sleep(3)
             if self._status == CANCELLED:
                 raise ClusterCancelledError('Job %s was cancelled'
                                             % self.job_name)
