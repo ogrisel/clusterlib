@@ -14,12 +14,6 @@ from clusterlib.futures import CANCELLATION_SIGNALS
 from clusterlib.testing import TemporaryDirectory, skip_if_no_backend
 
 
-TEMP_FOLDER_PARAMS = {
-    'dir': os.environ.get('CLUSTERLIB_TEST_SHARED_FOLDER', '.'),
-    'delete_on_exit': int(os.environ.get('CLUSTERLIB_DELETE_TEST_FOLDER', 1)),
-}
-
-
 def _increment(a, step=1, raise_exc=None):
     """Dummy test function to call in parallel"""
     if raise_exc is not None:
@@ -45,7 +39,7 @@ EXECUTOR_PARAMS = {
 
 
 def test_atomic_markers():
-    with TemporaryDirectory(**TEMP_FOLDER_PARAMS) as test_folder:
+    with TemporaryDirectory() as test_folder:
         with AtomicMarker(test_folder, 'marker') as marker:
             assert_true(marker.isset())
 
@@ -91,7 +85,7 @@ def test_atomic_markers():
 
 
 def test_executor_folder():
-    with TemporaryDirectory(**TEMP_FOLDER_PARAMS) as test_folder:
+    with TemporaryDirectory() as test_folder:
         cluster_folder = os.path.join(test_folder, 'clusterlib')
         with ClusterExecutor(folder=cluster_folder):
             # Check that the work folder of the executor was initialized
@@ -100,7 +94,7 @@ def test_executor_folder():
 
 @skip_if_no_backend
 def test_executor_map():
-    with TemporaryDirectory(**TEMP_FOLDER_PARAMS) as test_folder:
+    with TemporaryDirectory() as test_folder:
         cluster_folder = os.path.join(test_folder, 'clusterlib')
         with ClusterExecutor(folder=cluster_folder, **EXECUTOR_PARAMS) as e:
             results = e.map(_increment, range(10))
@@ -123,7 +117,7 @@ def test_executor_map():
 
 @skip_if_no_backend
 def test_executor_submit():
-    with TemporaryDirectory(**TEMP_FOLDER_PARAMS) as test_folder:
+    with TemporaryDirectory() as test_folder:
         cluster_folder = os.path.join(test_folder, 'clusterlib')
         with ClusterExecutor(folder=cluster_folder, **EXECUTOR_PARAMS) as e:
             f1 = e.submit(_increment, 1)
@@ -165,7 +159,7 @@ def test_executor_submit():
 
 @skip_if_no_backend
 def test_executor_job_duplication():
-    with TemporaryDirectory(**TEMP_FOLDER_PARAMS) as test_folder:
+    with TemporaryDirectory() as test_folder:
         cluster_folder = os.path.join(test_folder, 'clusterlib')
         with ClusterExecutor(folder=cluster_folder, **EXECUTOR_PARAMS) as e:
             f1 = e.submit(sleep, 100)
@@ -197,7 +191,7 @@ def _check_self_is_running():
 
 @skip_if_no_backend
 def test_running_marker_from_job():
-    with TemporaryDirectory(**TEMP_FOLDER_PARAMS) as test_folder:
+    with TemporaryDirectory() as test_folder:
         cluster_folder = os.path.join(test_folder, 'clusterlib')
         with ClusterExecutor(folder=cluster_folder, **EXECUTOR_PARAMS) as e:
             f = e.submit(_check_self_is_running)
@@ -213,7 +207,7 @@ def _send_signal_to_self(signum):
 
 @skip_if_no_backend
 def test_executor_cancel_by_signal():
-    with TemporaryDirectory(**TEMP_FOLDER_PARAMS) as test_folder:
+    with TemporaryDirectory() as test_folder:
         cluster_folder = os.path.join(test_folder, 'clusterlib')
         with ClusterExecutor(folder=cluster_folder, **EXECUTOR_PARAMS) as e:
             futures = [e.submit(_send_signal_to_self, s)
@@ -246,7 +240,7 @@ def test_executor_cancel_by_signal():
 
 @skip_if_no_backend
 def test_executor_cancel():
-    with TemporaryDirectory(**TEMP_FOLDER_PARAMS) as test_folder:
+    with TemporaryDirectory() as test_folder:
         cluster_folder = os.path.join(test_folder, 'clusterlib')
         with ClusterExecutor(folder=cluster_folder, **EXECUTOR_PARAMS) as e:
             f1 = e.submit(sleep, 100)

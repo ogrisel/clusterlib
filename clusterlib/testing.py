@@ -7,6 +7,7 @@ Note: this module has a dependency on the nose package.
 #
 # License: BSD 3 clause
 import shutil
+import os
 import warnings
 from tempfile import mkdtemp
 
@@ -14,6 +15,10 @@ from nose import SkipTest
 from nose.tools import with_setup
 
 from clusterlib.scheduler import _get_backend
+
+SHARED_TEST_FOLDER = os.environ.get('CLUSTERLIB_TEST_SHARED_FOLDER', '.')
+DELETE_TEST_FOLDER = int(os.environ.get('CLUSTERLIB_DELETE_TEST_FOLDER', 1))
+TEMP_FOLDER_PREFIX = "clusterlib_test_"
 
 
 class TemporaryDirectory(object):
@@ -36,8 +41,8 @@ class TemporaryDirectory(object):
     name = None
     _closed = False
 
-    def __init__(self, suffix="", prefix="tmp", dir=None,
-                 delete_on_exit=True):
+    def __init__(self, suffix="", prefix=TEMP_FOLDER_PREFIX,
+                 dir=SHARED_TEST_FOLDER, delete_on_exit=DELETE_TEST_FOLDER):
         self.name = mkdtemp(suffix, prefix, dir)
         self.delete_on_exit = delete_on_exit
 
